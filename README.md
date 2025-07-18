@@ -42,37 +42,4 @@ We will release multiple dumps of different scales soon. We also offer an interf
 ### Pretrain your own nanoTabPFN
 First we download 1M pre-generated datasets with 200 datapoints, up to 10 features and up to 10 classes each from [here](https://ml.informatik.uni-freiburg.de/profile/pfefferle/nanoTabPFN/200x10_classification.h5).
 
-Now that we have some data to train our architecture on we look at the code:
-First we import our Architecture, Prior interface and training loop, etc.
-```python
-from nanotabpfn.model import NanoTabPFNModel
-from nanotabpfn.priors import PriorDumpDataLoader
-from nanotabpfn.train import train
-from nanotabpfn.utils import get_default_device
-from torch.nn import CrossEntropyLoss
-```
-then we instantiate our model and loss criterion:
-```python
-model = NanoTabPFNModel(
-    num_attention_heads=6,
-    embedding_size=192,
-    mlp_hidden_size=768,
-    num_layers=6,
-    num_outputs=10,
-)
-criterion = CrossEntropyLoss()
-```
-then we instantiate our prior:
-```python
-prior = PriorDumpDataLoader(filename='200x10_classification.h5', num_steps=20, batch_size=50, device=device)
-```
-and finally train our model:
-```python
-trained_model, loss = train(
-    model=model,
-    prior=prior,
-    criterion=criterion,
-    epochs=1000,
-    device=get_default_device()
-)
-```
+Then run `python pretrain_classification.py -priordump 200x10_classification.h5`
