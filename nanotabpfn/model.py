@@ -96,8 +96,8 @@ class FeatureEncoder(nn.Module):
                            the embeddings of the features
         """
         x = x.unsqueeze(-1)
-        mean = torch.mean(x[:, :single_eval_pos], axis=1)
-        std = torch.std(x[:, :single_eval_pos], axis=1) + 1e-20
+        mean = torch.mean(x[:, :single_eval_pos], axis=1, keepdims=True)
+        std = torch.std(x[:, :single_eval_pos], axis=1, keepdims=True) + 1e-20
         x = (x-mean)/std
         x = torch.clip(x, min=-100, max=100)
         return self.linear_layer(x)
