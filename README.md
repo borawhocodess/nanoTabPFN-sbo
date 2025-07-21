@@ -40,6 +40,6 @@ print("Accuracy", accuracy_score(y_test, predictions))
 We will release multiple dumps of different scales soon. We also offer an interface where you can provide your own get\_batch function.
 
 ### Pretrain your own nanoTabPFN
-First we download 1M pre-generated datasets with 200 datapoints, up to 10 features and up to 10 classes each from [here](https://ml.informatik.uni-freiburg.de/research-artifacts/pfefferle/nanoTabPFN/200x10_classification.h5).
+First we download 100k pre-generated datasets with 50 datapoints, 3 features and up to 3  classes each from [here](https://ml.informatik.uni-freiburg.de/research-artifacts/pfefferle/nanoTabPFN/50x3_3_100k_classification.h5).
 
-Then run `python pretrain_classification.py -priordump 200x10_classification.h5`
+Then run `python pretrain_classification.py -epochs 80 -steps 25 -batchsize 50 -priordump 50x3_3_100k_classification.h5`
