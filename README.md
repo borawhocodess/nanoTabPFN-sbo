@@ -39,7 +39,55 @@ print("Accuracy", accuracy_score(y_test, predictions))
 `nanotabpfn/model.py` contains the implementation of the architecture in less than 250 lines of code. `nanotabpfn/train.py` implements a simple training loop in under 100 lines and `nanotabpfn/priors.py` implements a dataloader that allows you to load a dump pre-generated from a prior.
 We will release multiple dumps of different scales soon. We also offer an interface where you can provide your own get\_batch function.
 
-### Pretrain your own nanoTabPFN
+### Pretrain your own small nanoTabPFN
 First we download 100k pre-generated datasets with 50 datapoints, 3 features and up to 3  classes each from [here](https://ml.informatik.uni-freiburg.de/research-artifacts/pfefferle/nanoTabPFN/50x3_3_100k_classification.h5).
 
-Then run `python pretrain_classification.py -epochs 80 -steps 25 -batchsize 50 -priordump 50x3_3_100k_classification.h5`
+Then you can run:
+```
+python pretrain_classification.py -epochs 80 -steps 25 -batchsize 50 -priordump 50x3_3_100k_classification.h5
+```
+This should take less than 5 min on a modern NVIDIA GPU (around 10 minutes on Macbook M4 Pro GPU and around 40 min on M4 Pro CPU).
+
+#### Step by Step Explanation
+
+First we import our Architecture, Prior interface and training loop, etc.
+```python
+from nanotabpfn.model import NanoTabPFNModel
+from nanotabpfn.priors import PriorDumpDataLoader
+from nanotabpfn.train import train
+from nanotabpfn.utils import get_default_device
+from nanotabpfn.interface import NanoTabPFNClassifier
+from torch.nn import CrossEntropyLoss
+```
+then we instantiate our model and loss criterion:
+```python
+model = NanoTabPFNModel(
+    num_attention_heads=6,
+    embedding_size=192,
+    mlp_hidden_size=768,
+    num_layers=6,
+    num_outputs=10,
+)
+criterion = CrossEntropyLoss()
+```
+then we instantiate our prior:
+```python
+device = get_default_device()
+prior = PriorDumpDataLoader(filename='50x3_3_100k_classification.h5', num_steps=25, batch_size=50, device=device)
+```
+and finally train our model:
+```python
+def epoch_callback(epoch, epoch_time, mean_loss, model):
+    classifier = NanoTabPFNClassifier(model, device)
+    # you can add your own eval code here that runs after every epoch
+    print(f'epoch {epoch:5d} | time {epoch_time:5.2f}s | mean loss {mean_loss:5.2f}', flush=True)
+
+trained_model, loss = train(
+    model=model,
+    prior=prior,
+    criterion=criterion,
+    epochs=80,
+    device=device,
+    epoch_callback=epoch_callback
+)
+```
