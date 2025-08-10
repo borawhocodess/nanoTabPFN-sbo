@@ -11,7 +11,7 @@ from nanotabpfn.utils import get_default_device
 
 def train(model: NanoTabPFNModel, prior: DataLoader, criterion: nn.CrossEntropyLoss | FullSupportBarDistribution, epochs: int,
           accumulate_gradients: int = 1, lr: float = 1e-4, device: torch.device = None,
-	  epoch_callback: Callable[[int, float, float, NanoTabPFNModel], None] = None, ckpt: Dict[str, torch.Tensor] = None):
+	  epoch_callback: Callable[[int, float, float, NanoTabPFNModel, FullSupportBarDistribution | None], None] = None, ckpt: Dict[str, torch.Tensor] = None):
     """
     Trains our model on the given prior using the given criterion.
 
@@ -82,7 +82,10 @@ def train(model: NanoTabPFNModel, prior: DataLoader, criterion: nn.CrossEntropyL
             torch.save(training_state, 'latest_checkpoint.pth')
 
             if epoch_callback:
-                epoch_callback(epoch, end_time-start_time, mean_loss, model)
+                if type(criterion) is FullSupportBarDistribution:
+                    epoch_callback(epoch, end_time - start_time, mean_loss, model, dist=criterion)
+                else:
+                    epoch_callback(epoch, end_time-start_time, mean_loss, model)
     except KeyboardInterrupt:
         pass
 

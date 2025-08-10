@@ -4,6 +4,8 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
+from pfns.bar_distribution import FullSupportBarDistribution
+
 from nanotabpfn.utils import get_default_device
 from nanotabpfn.model import NanoTabPFNModel
 
@@ -71,3 +73,62 @@ class NanoTabPFNClassifier():
             return probabilities.to('cpu').numpy()
 
 
+class NanoTabPFNRegressor():
+    """ scikit-learn like interface """
+    def __init__(self, model: NanoTabPFNModel|str|None = None, dist: FullSupportBarDistribution|str|None = None, device=get_default_device()):
+        if model == None:
+            model = 'nanotabpfn_weights.pth'
+            dist = 'nanotabpfn_buckets.pth'
+            if not os.path.isfile(model):
+                print('No cached model found, downloading model checkpoint.')
+                response = requests.get('') # TODO put URL here
+                with open(model, 'wb') as f:
+                    f.write(response.content)
+            if not os.path.isfile(dist):
+                print('No cached bucket edges found, downloading bucket edges.')
+                response = requests.get('') # TODO put URL here
+                with open(dist, 'wb') as f:
+                    f.write(response.content)
+        if isinstance(model, str):
+            model = init_model_from_state_dict_file(model)
+        
+        if isinstance(dist, str):
+            bucket_edges = torch.load(dist, map_location=self.device)
+            dist = FullSupportBarDistribution(bucket_edges).float()
+
+        self.model = model.to(device)
+        self.device = device
+        self.dist = dist
+        self.normalized_dist = None  # Used after fit()
+
+    def fit(self, X_train: np.array, y_train: np.array):
+        """
+        Stores X_train and y_train for later use. Computes target normalization. Builds normalized bar distribution from existing self.dist.
+        """
+        self.X_train = X_train
+        self.y_train = y_train
+
+        self.y_train_mean = np.mean(self.y_train)
+        self.y_train_std = np.std(self.y_train) + 1e-8
+        self.y_train_n = (self.y_train - self.y_train_mean) / self.y_train_std
+
+        # Convert base distribution to original scale for output
+        bucket_edges = self.dist.borders
+        bucket_edges_denorm = bucket_edges * self.y_train_std + self.y_train_mean
+        self.normalized_dist = FullSupportBarDistribution(bucket_edges_denorm).float()
+
+    def predict(self, X_test: np.array) -> np.array:
+        """
+        Performs in-context learning using X_train and y_train. Predicts the means of the output distributions for X_test.
+        """
+        X = np.concatenate((self.X_train, X_test))
+        y = self.y_train_n
+
+        with torch.no_grad():
+            X_tensor = torch.tensor(X, dtype=torch.float32, device=self.device).unsqueeze(0)
+            y_tensor = torch.tensor(y, dtype=torch.float32, device=self.device).unsqueeze(0)
+
+            logits = self.model((X_tensor, y_tensor), single_eval_pos=len(self.X_train)).squeeze(0)
+            preds = self.normalized_dist.mean(logits)
+
+        return preds.cpu().numpy()
