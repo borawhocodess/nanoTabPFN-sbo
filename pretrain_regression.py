@@ -1,6 +1,5 @@
 import argparse
 import torch
-import numpy as np
 
 from nanotabpfn.priors import PriorDumpDataLoader
 from nanotabpfn.model import NanoTabPFNModel
@@ -66,9 +65,6 @@ if ckpt:
     model.load_state_dict(ckpt['model'])
     
 dist = FullSupportBarDistribution(bucket_edges)
-
-start_epoch = 1
-optimizer_state_dict = None
 
 datasets = []
 datasets.append(train_test_split(*load_diabetes(return_X_y=True), test_size=0.5, random_state=42))

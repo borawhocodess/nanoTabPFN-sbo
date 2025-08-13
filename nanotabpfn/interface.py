@@ -93,7 +93,7 @@ class NanoTabPFNRegressor():
             model = init_model_from_state_dict_file(model)
         
         if isinstance(dist, str):
-            bucket_edges = torch.load(dist, map_location=self.device)
+            bucket_edges = torch.load(dist, map_location=device)
             dist = FullSupportBarDistribution(bucket_edges).float()
 
         self.model = model.to(device)
