@@ -164,7 +164,6 @@ def epoch_callback(epoch, epoch_time, mean_loss, model, dist):
         regressor.fit(X_train, y_train)
         pred = regressor.predict(X_test)
         scores.append(r2_score(y_test, pred))
-        print(r2_score(y_test, pred))
     avg_score = sum(scores) / len(scores)
     print(
         f"epoch {epoch:5d} | time {epoch_time:5.2f}s | mean loss {mean_loss:5.2f} | avg r2 score {avg_score:.3f}",
