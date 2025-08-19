@@ -15,7 +15,7 @@ from sklearn.metrics import r2_score
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument("-priordump", type=str, default="/dump.h5", help="path to the prior dump")
+parser.add_argument("-priordump", type=str, default="/50x3_1280k_regression.h5", help="path to the prior dump")
 parser.add_argument("-saveweights", type=str, default="nanotabpfn_weights.pth", help="path to save the trained model to")
 parser.add_argument("-savebuckets", type=str, default="nanotabpfn_buckets.pth", help="path to save the bucket edges to")
 parser.add_argument("-heads", type=int, default=6, help="number of attention heads")
@@ -63,7 +63,7 @@ torch.save(
 
 if ckpt:
     model.load_state_dict(ckpt['model'])
-    
+
 dist = FullSupportBarDistribution(bucket_edges)
 
 datasets = []
@@ -78,7 +78,7 @@ def epoch_callback(epoch, epoch_time, mean_loss, model, dist):
         scores.append(r2_score(y_test, pred))
         print(r2_score(y_test, pred))
     avg_score = sum(scores)/len(scores)
-    print(f'epoch {epoch:5d} | time {epoch_time:5.2f}s | mean loss {mean_loss:5.2f} | avg r2 score {avg_score:.3f}',flush=True)
+    print(f'epoch {epoch:5d} | time {epoch_time:5.2f}s | mean loss {mean_loss:5.2f} | avg r2 score {avg_score:.3f}', flush=True)
 
 
 trained_model, loss = train(

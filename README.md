@@ -48,7 +48,11 @@ python pretrain_classification.py -epochs 80 -steps 25 -batchsize 50 -priordump 
 ```
 This should take less than 5 min on a modern NVIDIA GPU (around 10 minutes on Macbook M4 Pro GPU and around 40 min on M4 Pro CPU).
 
-#### Step by Step Explanation
+We also offer a pre-generated dataset containing 1.28M tables with 50 datapoints and 3 features each for regression [here](https://ml.informatik.uni-freiburg.de/research-artifacts/pfefferle/nanoTabPFN/50x3_3_100k_classification.h5).
+
+You can pretrain on it using `python pretrain_regressor.py`.
+
+#### Step by Step Explanation (Classifier)
 
 First we import our Architecture, Prior interface and training loop, etc.
 ```python

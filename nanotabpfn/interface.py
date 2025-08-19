@@ -36,7 +36,7 @@ class NanoTabPFNClassifier():
             model = 'nanotabpfn.pth'
             if not os.path.isfile(model):
                 print('No cached model found, downloading model checkpoint.')
-                response = requests.get('https://ml.informatik.uni-freiburg.de/research-artifacts/pfefferle/nanoTabPFN/nanotabpfn.pth')
+                response = requests.get('https://ml.informatik.uni-freiburg.de/research-artifacts/pfefferle/nanoTabPFN/nanotabpfn_classifier.pth')
                 with open(model, 'wb') as f:
                     f.write(response.content)
         if isinstance(model, str):
@@ -77,21 +77,21 @@ class NanoTabPFNRegressor():
     """ scikit-learn like interface """
     def __init__(self, model: NanoTabPFNModel|str|None = None, dist: FullSupportBarDistribution|str|None = None, device=get_default_device()):
         if model == None:
-            model = 'nanotabpfn_weights.pth'
-            dist = 'nanotabpfn_buckets.pth'
+            model = 'nanotabpfn_regressor.pth'
+            dist = 'nanotabpfn_regressor_buckets.pth'
             if not os.path.isfile(model):
                 print('No cached model found, downloading model checkpoint.')
-                response = requests.get('') # TODO put URL here
+                response = requests.get('https://ml.informatik.uni-freiburg.de/research-artifacts/pfefferle/nanoTabPFN/nanotabpfn_regressor.pth')
                 with open(model, 'wb') as f:
                     f.write(response.content)
             if not os.path.isfile(dist):
                 print('No cached bucket edges found, downloading bucket edges.')
-                response = requests.get('') # TODO put URL here
+                response = requests.get('https://ml.informatik.uni-freiburg.de/research-artifacts/pfefferle/nanoTabPFN/nanotabpfn_regressor_buckets.pth')
                 with open(dist, 'wb') as f:
                     f.write(response.content)
         if isinstance(model, str):
             model = init_model_from_state_dict_file(model)
-        
+
         if isinstance(dist, str):
             bucket_edges = torch.load(dist, map_location=device)
             dist = FullSupportBarDistribution(bucket_edges).float()

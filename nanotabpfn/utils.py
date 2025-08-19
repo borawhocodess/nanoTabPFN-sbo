@@ -19,14 +19,14 @@ def get_default_device():
 def make_global_bucket_edges(filename, n_buckets=100, device=get_default_device(), max_y=5_000_000):
     with h5py.File(filename, "r") as f:
         y = f["y"]
-        n_rows, n_cols = y.shape
-        total = n_rows * n_cols
+        num_tables, num_datapoints = y.shape
+        total = num_tables * num_datapoints
 
         if max_y >= total:
             ys_concat = y[...].reshape(-1)
         else:
-            full_rows = max_y // n_cols
-            rem =  max_y % n_cols
+            full_rows = max_y // num_datapoints
+            rem =  max_y % num_datapoints
 
             parts = []
             if full_rows > 0:
