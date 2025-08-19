@@ -1,17 +1,19 @@
 import os
-import requests
+
 import numpy as np
+import requests
 import torch
 import torch.nn.functional as F
-
 from pfns.bar_distribution import FullSupportBarDistribution
 
-from nanotabpfn.utils import get_default_device
 from nanotabpfn.model import NanoTabPFNModel
+from nanotabpfn.utils import get_default_device
+
 
 def init_model_from_state_dict_file(file_path):
     """
-    infers model architecture from state dict, instantiates the architecture and loads the weights
+    infers model architecture from state dict,
+    instantiates the architecture and loads the weights
     """
     state_dict = torch.load(file_path, map_location=torch.device('cpu'))
     embedding_size = state_dict['feature_encoder.linear_layer.weight'].shape[0]
@@ -29,10 +31,18 @@ def init_model_from_state_dict_file(file_path):
     model.load_state_dict(torch.load(file_path, map_location='cpu'))
     return model
 
-class NanoTabPFNClassifier():
-    """ scikit-learn like interface """
-    def __init__(self, model: NanoTabPFNModel|str|None = None, device=get_default_device()):
-        if model == None:
+
+class NanoTabPFNClassifier:
+    """
+    scikit-learn like interface
+    """
+
+    def __init__(
+        self,
+        model: NanoTabPFNModel | str | None = None,
+        device=get_default_device(),
+    ):
+        if model is None:
             model = 'nanotabpfn.pth'
             if not os.path.isfile(model):
                 print('No cached model found, downloading model checkpoint.')
@@ -45,38 +55,53 @@ class NanoTabPFNClassifier():
         self.device = device
 
     def fit(self, X_train: np.array, y_train: np.array):
-        """ stores X_train and y_train for later use, also computes the highest class number occuring in num_classes """
+        """
+        stores X_train and y_train for later use,
+        also computes the highest class number occuring in num_classes
+        """
         self.X_train = X_train
         self.y_train = y_train
         self.num_classes = max(set(y_train))+1
 
     def predict(self, X_test: np.array) -> np.array:
-        """ calls predit_proba and picks the class with the highest probability for each datapoint """
+        """
+        calls predit_proba and picks the class
+        with the highest probability for each datapoint
+        """
         predicted_probabilities = self.predict_proba(X_test)
         return predicted_probabilities.argmax(axis=1)
 
     def predict_proba(self, X_test: np.array) -> np.array:
         """
-        creates (x,y), runs it through our PyTorch Model, cuts off the classes that didn't appear in the training data
+        creates (x,y), runs it through our PyTorch Model,
+        cuts off the classes that didn't appear in the training data
         and applies softmax to get the probabilities
         """
         x = np.concatenate((self.X_train, X_test))
         y = self.y_train
         with torch.no_grad():
-            x = torch.from_numpy(x).unsqueeze(0).to(torch.float).to(self.device)  # introduce batch size 1
-            y = torch.from_numpy(y).unsqueeze(0).to(torch.float).to(self.device)
+            x = torch.as_tensor(x, dtype=torch.float32, device=self.device).unsqueeze(0)  # introduce batch size 1
+            y = torch.as_tensor(y, dtype=torch.float32, device=self.device).unsqueeze(0)
             out = self.model((x, y), single_eval_pos=len(self.X_train)).squeeze(0)  # remove batch size 1
             # our pretrained classifier supports up to num_outputs classes, if the dataset has less we cut off the rest
             out = out[:, :self.num_classes]
             # apply softmax to get a probability distribution
             probabilities = F.softmax(out, dim=1)
-            return probabilities.to('cpu').numpy()
+            return probabilities.cpu().numpy()
 
 
-class NanoTabPFNRegressor():
-    """ scikit-learn like interface """
-    def __init__(self, model: NanoTabPFNModel|str|None = None, dist: FullSupportBarDistribution|str|None = None, device=get_default_device()):
-        if model == None:
+class NanoTabPFNRegressor:
+    """
+    scikit-learn like interface
+    """
+
+    def __init__(
+        self,
+        model: NanoTabPFNModel | str | None = None,
+        dist: FullSupportBarDistribution | str | None = None,
+        device=get_default_device(),
+    ):
+        if model is None:
             model = 'nanotabpfn_regressor.pth'
             dist = 'nanotabpfn_regressor_buckets.pth'
             if not os.path.isfile(model):
@@ -103,7 +128,9 @@ class NanoTabPFNRegressor():
 
     def fit(self, X_train: np.array, y_train: np.array):
         """
-        Stores X_train and y_train for later use. Computes target normalization. Builds normalized bar distribution from existing self.dist.
+        Stores X_train and y_train for later use.
+        Computes target normalization.
+        Builds normalized bar distribution from existing self.dist.
         """
         self.X_train = X_train
         self.y_train = y_train
@@ -119,7 +146,8 @@ class NanoTabPFNRegressor():
 
     def predict(self, X_test: np.array) -> np.array:
         """
-        Performs in-context learning using X_train and y_train. Predicts the means of the output distributions for X_test.
+        Performs in-context learning using X_train and y_train.
+        Predicts the means of the output distributions for X_test.
         """
         X = np.concatenate((self.X_train, X_test))
         y = self.y_train_n

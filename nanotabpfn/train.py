@@ -1,17 +1,27 @@
-import torch
-from torch import nn
 import time
-from torch.utils.data import DataLoader
-from typing import Tuple, Dict, Callable
-from pfns.bar_distribution import FullSupportBarDistribution
+from typing import Callable, Dict
+
 import schedulefree
+import torch
+from pfns.bar_distribution import FullSupportBarDistribution
+from torch import nn
+from torch.utils.data import DataLoader
 
 from nanotabpfn.model import NanoTabPFNModel
 from nanotabpfn.utils import get_default_device
 
-def train(model: NanoTabPFNModel, prior: DataLoader, criterion: nn.CrossEntropyLoss | FullSupportBarDistribution, epochs: int,
-          accumulate_gradients: int = 1, lr: float = 1e-4, device: torch.device = None,
-	  epoch_callback: Callable[[int, float, float, NanoTabPFNModel, FullSupportBarDistribution | None], None] = None, ckpt: Dict[str, torch.Tensor] = None):
+
+def train(
+    model: NanoTabPFNModel,
+    prior: DataLoader,
+    criterion: nn.CrossEntropyLoss | FullSupportBarDistribution,
+    epochs: int,
+    accumulate_gradients: int = 1,
+    lr: float = 1e-4,
+    device: torch.device = None,
+    epoch_callback: Callable[[int, float, float, NanoTabPFNModel, FullSupportBarDistribution | None], None] = None,
+    ckpt: Dict[str, torch.Tensor] = None,
+):
     """
     Trains our model on the given prior using the given criterion.
 
@@ -48,8 +58,10 @@ def train(model: NanoTabPFNModel, prior: DataLoader, criterion: nn.CrossEntropyL
             total_loss = 0.
             for i, full_data in enumerate(prior):
                 single_eval_pos = full_data['single_eval_pos']
-                data = (full_data['x'].to(device),
-                        full_data['y'][:, :single_eval_pos].to(device))
+                data = (
+                    full_data['x'].to(device),
+                    full_data['y'][:, :single_eval_pos].to(device),
+                )
                 if (torch.isnan(data[0]).any() or torch.isnan(data[1]).any()):
                     continue
                 targets = full_data['target_y'].to(device)
@@ -77,7 +89,7 @@ def train(model: NanoTabPFNModel, prior: DataLoader, criterion: nn.CrossEntropyL
             training_state = {
                 'epoch': epoch,
                 'model': model.state_dict(),
-                'optimizer': optimizer.state_dict()
+                'optimizer': optimizer.state_dict(),
             }
             torch.save(training_state, 'latest_checkpoint.pth')
 
@@ -86,6 +98,7 @@ def train(model: NanoTabPFNModel, prior: DataLoader, criterion: nn.CrossEntropyL
                     epoch_callback(epoch, end_time - start_time, mean_loss, model, dist=criterion)
                 else:
                     epoch_callback(epoch, end_time-start_time, mean_loss, model)
+
     except KeyboardInterrupt:
         pass
 
