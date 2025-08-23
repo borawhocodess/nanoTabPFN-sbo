@@ -42,7 +42,7 @@ class NanoTabPFNClassifier:
         model: NanoTabPFNModel | str | None = None,
         device=get_default_device(),
     ):
-        if model == None:
+        if model is None:
             model = 'nanotabpfn.pth'
             if not os.path.isfile(model):
                 print('No cached model found, downloading model checkpoint.')
@@ -80,14 +80,14 @@ class NanoTabPFNClassifier:
         x = np.concatenate((self.X_train, X_test))
         y = self.y_train
         with torch.no_grad():
-            x = torch.from_numpy(x).unsqueeze(0).to(torch.float).to(self.device)  # introduce batch size 1
-            y = torch.from_numpy(y).unsqueeze(0).to(torch.float).to(self.device)
+            x = torch.as_tensor(x, dtype=torch.float32, device=self.device).unsqueeze(0)  # introduce batch size 1
+            y = torch.as_tensor(y, dtype=torch.float32, device=self.device).unsqueeze(0)
             out = self.model((x, y), single_eval_pos=len(self.X_train)).squeeze(0)  # remove batch size 1
             # our pretrained classifier supports up to num_outputs classes, if the dataset has less we cut off the rest
             out = out[:, :self.num_classes]
             # apply softmax to get a probability distribution
             probabilities = F.softmax(out, dim=1)
-            return probabilities.to('cpu').numpy()
+            return probabilities.cpu().numpy()
 
 
 class NanoTabPFNRegressor:
@@ -101,7 +101,7 @@ class NanoTabPFNRegressor:
         dist: FullSupportBarDistribution | str | None = None,
         device=get_default_device(),
     ):
-        if model == None:
+        if model is None:
             model = 'nanotabpfn_regressor.pth'
             dist = 'nanotabpfn_regressor_buckets.pth'
             if not os.path.isfile(model):
