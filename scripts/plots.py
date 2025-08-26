@@ -1,11 +1,11 @@
 import argparse
 import os
-from datetime import datetime
 
 import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.ticker import MaxNLocator
 from sklearn.preprocessing import MinMaxScaler
+from utils import get_target_dir, get_timestamp, pxp
 
 from nanotabpfn.interface import NanoTabPFNRegressor
 
@@ -32,16 +32,6 @@ def parse_args():
     args = parser.parse_args()
 
     return args
-
-
-def pxp(x):
-    print()
-    print(x)
-    print()
-
-
-def get_timestamp():
-    return datetime.now().strftime("%Y%m%d_%H%M%S")
 
 
 def generate_datasets(n=50, seed=42, lower=-8, upper=8, sampling="auto"):
@@ -140,20 +130,15 @@ def visualise_and_save(seed, sampling, vs_tabpfn, plot_filepath):
 def main():
     args = parse_args()
 
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    root_dir = os.path.dirname(script_dir)
-
-    pxp(f"root dir: {root_dir}")
-
     timestamp = get_timestamp()
 
     other_dir = "other"
     plots_dir = "plots"
     plot_filename = f"{timestamp}_plot.png"
 
-    plot_dirpath = os.path.join(root_dir, other_dir, plots_dir)
-    plot_filepath = os.path.join(plot_dirpath, plot_filename)
-    os.makedirs(plot_dirpath, exist_ok=True)
+    plot_dir = get_target_dir(other_dir, plots_dir, verbose=False)
+
+    plot_filepath = os.path.join(plot_dir, plot_filename)
 
     visualise_and_save(
         seed=args.seed,

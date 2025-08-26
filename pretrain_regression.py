@@ -1,7 +1,8 @@
 import argparse
+import os
 
 import torch
-from pfns.bar_distribution import FullSupportBarDistribution
+from pfns.model.bar_distribution import FullSupportBarDistribution
 from sklearn.datasets import load_diabetes
 from sklearn.metrics import r2_score
 from sklearn.model_selection import train_test_split
@@ -21,43 +22,43 @@ parser = argparse.ArgumentParser()
 parser.add_argument(
     "-priordump",
     type=str,
-    default="/50x3_1280k_regression.h5",
+    default="other/dumps/50x3_1280k_regression.h5",
     help="path to the prior dump",
 )
 parser.add_argument(
     "-saveweights",
     type=str,
-    default="nanotabpfn_weights.pth",
+    default="other/model/nanotabpfn_regressor_weights.pth",
     help="path to save the trained model to",
 )
 parser.add_argument(
     "-savebuckets",
     type=str,
-    default="nanotabpfn_buckets.pth",
+    default="other/model/nanotabpfn_buckets.pth",
     help="path to save the bucket edges to",
 )
 parser.add_argument(
     "-heads",
     type=int,
-    default=6, # 4
+    default=6,  # 4
     help="number of attention heads",
 )
 parser.add_argument(
     "-embeddingsize",
     type=int,
-    default=192, # 512
+    default=192,  # 512
     help="the size of the embeddings used for the cells",
 )
 parser.add_argument(
     "-hiddensize",
     type=int,
-    default=768, # 1024
+    default=768,  # 1024
     help="size of the hidden layer of the mlps",
 )
 parser.add_argument(
     "-layers",
     type=int,
-    default=6, # 12
+    default=6,  # 12
     help="number of transformer layers",
 )
 parser.add_argument(
@@ -99,12 +100,15 @@ parser.add_argument(
 parser.add_argument(
     "-n_buckets",
     type=int,
-    default=100, # 5000
+    default=100,  # 5000
     help="number of buckets for the data loader",
 )
 
 
 args = parser.parse_args()
+
+os.makedirs(os.path.dirname(args.saveweights), exist_ok=True)
+os.makedirs(os.path.dirname(args.savebuckets), exist_ok=True)
 
 set_randomness_seed(2402)
 

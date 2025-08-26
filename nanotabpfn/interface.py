@@ -4,7 +4,7 @@ import numpy as np
 import requests
 import torch
 import torch.nn.functional as F
-from pfns.bar_distribution import FullSupportBarDistribution
+from pfns.model.bar_distribution import FullSupportBarDistribution
 
 from nanotabpfn.model import NanoTabPFNModel
 from nanotabpfn.utils import get_default_device

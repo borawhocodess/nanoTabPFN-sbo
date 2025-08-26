@@ -3,7 +3,7 @@ from typing import Callable, Dict
 
 import schedulefree
 import torch
-from pfns.bar_distribution import FullSupportBarDistribution
+from pfns.model.bar_distribution import FullSupportBarDistribution
 from torch import nn
 from torch.utils.data import DataLoader
 
