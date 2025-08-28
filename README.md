@@ -91,3 +91,6 @@ trained_model, loss = train(
     callbacks=[ConsoleLoggerCallback()]
 )
 ```
+
+### Creating your own datasets
+Check out the [tabularpriors](https://github.com/automl/tabularpriors/) repository to create your own data using publicly available priors.
