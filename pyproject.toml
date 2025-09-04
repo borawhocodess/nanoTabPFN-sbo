@@ -31,3 +31,9 @@ Issues = "https://github.com/PriorLabs/nanoTabPFN/issues"
 
 [tool.setuptools]
 packages = { find = { include = ["nanotabpfn"] } }
+
+[dependency-groups]
+dev = [
+    "isort>=6.0.1",
+    "ruff>=0.12.11",
+]
