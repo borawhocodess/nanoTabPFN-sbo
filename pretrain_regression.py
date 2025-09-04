@@ -40,25 +40,25 @@ parser.add_argument(
 parser.add_argument(
     "-heads",
     type=int,
-    default=6, # 4
+    default=6,  # 4
     help="number of attention heads",
 )
 parser.add_argument(
     "-embeddingsize",
     type=int,
-    default=192, # 512
+    default=192,  # 512
     help="the size of the embeddings used for the cells",
 )
 parser.add_argument(
     "-hiddensize",
     type=int,
-    default=768, # 1024
+    default=768,  # 1024
     help="size of the hidden layer of the mlps",
 )
 parser.add_argument(
     "-layers",
     type=int,
-    default=6, # 12
+    default=6,  # 12
     help="number of transformer layers",
 )
 parser.add_argument(
@@ -100,7 +100,7 @@ parser.add_argument(
 parser.add_argument(
     "-n_buckets",
     type=int,
-    default=100, # 5000
+    default=100,  # 5000
     help="number of buckets for the data loader",
 )
 
@@ -108,7 +108,7 @@ parser.add_argument(
 args = parser.parse_args()
 
 os.makedirs(os.path.dirname(args.saveweights), exist_ok=True)
-os.makedirs(os.path.dirname(args.savebuckets), exist_ok=True)   
+os.makedirs(os.path.dirname(args.savebuckets), exist_ok=True)
 
 set_randomness_seed(2402)
 
