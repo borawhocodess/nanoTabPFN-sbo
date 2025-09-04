@@ -1,12 +1,17 @@
 # scripts/utils.py
 
 import os
+from datetime import datetime
 
 
 def pxp(x):
     print()
     print(x)
     print()
+
+
+def get_timestamp():
+    return datetime.now().strftime("%Y%m%d_%H%M%S")
 
 
 def get_target_dir(*subdirs, verbose=False):
