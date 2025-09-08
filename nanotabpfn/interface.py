@@ -38,8 +38,7 @@ def init_model_from_state_dict_file(file_path):
 
 def get_feature_preprocessor(X: ndarray | pd.DataFrame) -> ColumnTransformer:
     """
-    fits a preprocessor that replaces NaNs with the mean of the respective column
-    and scales each column to mean 0 and variance 1
+    fits a preprocessor that imputes NaNs
     """
     X = pd.DataFrame(X)
     num_mask = []

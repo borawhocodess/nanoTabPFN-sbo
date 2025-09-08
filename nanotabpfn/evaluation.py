@@ -5,6 +5,7 @@ import openml
 import torch
 from openml.config import set_root_cache_directory
 from openml.tasks import TaskType
+from sklearn.metrics import balanced_accuracy_score, roc_auc_score, r2_score
 from sklearn.preprocessing import LabelEncoder
 
 from nanotabpfn.interface import NanoTabPFNRegressor, NanoTabPFNClassifier
@@ -154,11 +155,9 @@ if __name__ == "__main__":
 
     for dataset_name, (y_true, y_pred, y_proba) in predictions.items():
         if args.model_type == "classification":
-            from sklearn.metrics import roc_auc_score, balanced_accuracy_score
             acc = balanced_accuracy_score(y_true, y_pred)
             auc = roc_auc_score(y_true, y_proba, multi_class='ovr')
             print(f"Dataset: {dataset_name} | ROC AUC: {auc:.4f} | Balanced Accuracy: {acc:.4f}")
         else:
-            from sklearn.metrics import r2_score
             r2 = r2_score(y_true, y_pred)
             print(f"Dataset: {dataset_name} | R2: {r2:.4f}")
