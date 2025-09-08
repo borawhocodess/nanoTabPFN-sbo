@@ -1,20 +1,16 @@
 import argparse
-import torch
-import numpy as np
 
+import torch
+from sklearn.metrics import accuracy_score
 from torch import nn
-from functools import partial
 
 from nanotabpfn.callbacks import ConsoleLoggerCallback
-from nanotabpfn.priors import PriorDumpDataLoader
+from nanotabpfn.evaluation import get_openml_predictions, TOY_TASKS_CLASSIFICATION
+from nanotabpfn.interface import NanoTabPFNClassifier
 from nanotabpfn.model import NanoTabPFNModel
+from nanotabpfn.priors import PriorDumpDataLoader
 from nanotabpfn.train import train
 from nanotabpfn.utils import get_default_device, set_randomness_seed
-from nanotabpfn.interface import NanoTabPFNClassifier
-
-from sklearn.datasets import *
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score, roc_auc_score
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-priordump", type=str, default="/50x3_3_100k_classification.h5", help="path to the prior dump")
@@ -55,29 +51,22 @@ model = NanoTabPFNModel(
 if ckpt:
     model.load_state_dict(ckpt['model'])
 
-datasets = []
-datasets.append(train_test_split(*load_iris(return_X_y=True), test_size=0.5, random_state=42))
-datasets.append(train_test_split(*load_wine(return_X_y=True), test_size=0.5, random_state=42))
-datasets.append(train_test_split(*load_breast_cancer(return_X_y=True), test_size=0.5, random_state=42))
-
-
 class EvaluationLoggerCallback(ConsoleLoggerCallback):
-    def __init__(self, datasets):
-        self.datasets = datasets
+    def __init__(self, tasks):
+        self.tasks = tasks
 
     def on_epoch_end(self, epoch: int, epoch_time: float, loss: float, model, **kwargs):
         classifier = NanoTabPFNClassifier(model, device)
+        predictions = get_openml_predictions(model=classifier, tasks=self.tasks)
         scores = []
-        for X_train, X_test, y_train, y_test in self.datasets:
-            classifier.fit(X_train, y_train)
-            pred = classifier.predict(X_test)
-            scores.append(accuracy_score(y_test, pred))
+        for dataset_name, (y_true, y_pred, y_proba) in predictions.items():
+            scores.append(accuracy_score(y_true, y_pred))
         avg_score = sum(scores) / len(scores)
         print(f'epoch {epoch:5d} | time {epoch_time:5.2f}s | mean loss {loss:5.2f} | avg accuracy {avg_score:.3f}',
               flush=True)
 
 
-callbacks = [EvaluationLoggerCallback(datasets)]
+callbacks = [EvaluationLoggerCallback(TOY_TASKS_CLASSIFICATION)]
 
 trained_model, loss = train(
     model=model,
