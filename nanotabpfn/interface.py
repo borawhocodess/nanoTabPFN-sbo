@@ -1,13 +1,20 @@
 import os
-import requests
+
 import numpy as np
+import pandas as pd
+import requests
 import torch
 import torch.nn.functional as F
-
+from numpy import ndarray
 from pfns.bar_distribution import FullSupportBarDistribution
+from sklearn.compose import ColumnTransformer
+from sklearn.impute import SimpleImputer
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OrdinalEncoder, FunctionTransformer
 
-from nanotabpfn.utils import get_default_device
 from nanotabpfn.model import NanoTabPFNModel
+from nanotabpfn.utils import get_default_device
+
 
 def init_model_from_state_dict_file(file_path):
     """
@@ -29,6 +36,39 @@ def init_model_from_state_dict_file(file_path):
     model.load_state_dict(torch.load(file_path, map_location='cpu'))
     return model
 
+def get_feature_preprocessor(X: ndarray | pd.DataFrame) -> ColumnTransformer:
+    """
+    fits a preprocessor that imputes NaNs
+    """
+    X = pd.DataFrame(X)
+    num_mask = []
+    for col in X:
+        non_nan_entries = X[col].notna().sum()
+        numeric_entries = pd.to_numeric(X[col], errors='coerce').notna().sum() # in case numeric columns are stored as strings
+        num_mask.append(non_nan_entries == numeric_entries)
+        # num_mask.append(is_numeric_dtype(X[col]))  # Assumes pandas dtype is correct
+
+    num_mask = np.array(num_mask)
+
+    num_transformer = Pipeline([
+        ("to_pandas", FunctionTransformer(lambda x: pd.DataFrame(x) if not isinstance(x, pd.DataFrame) else x)), # to apply pd.to_numeric of pandas
+        ("to_numeric", FunctionTransformer(lambda x: x.apply(pd.to_numeric, errors='coerce').to_numpy())), # in case numeric columns are stored as strings
+        ('imputer', SimpleImputer(strategy='mean')) # median might be better because of outliers
+    ])
+    cat_transformer = Pipeline([
+        ('encoder', OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=np.nan)),
+        ('imputer', SimpleImputer(strategy='most_frequent')),
+    ])
+
+    preprocessor = ColumnTransformer(
+        transformers=[
+            ('num', num_transformer, num_mask),
+            ('cat', cat_transformer, ~num_mask)
+        ]
+    )
+    return preprocessor
+
+
 class NanoTabPFNClassifier():
     """ scikit-learn like interface """
     def __init__(self, model: NanoTabPFNModel|str|None = None, device=get_default_device()):
@@ -46,7 +86,8 @@ class NanoTabPFNClassifier():
 
     def fit(self, X_train: np.array, y_train: np.array):
         """ stores X_train and y_train for later use, also computes the highest class number occuring in num_classes """
-        self.X_train = X_train
+        self.feature_preprocessor = get_feature_preprocessor(X_train)
+        self.X_train = self.feature_preprocessor.fit_transform(X_train)
         self.y_train = y_train
         self.num_classes = max(set(y_train))+1
 
@@ -60,7 +101,7 @@ class NanoTabPFNClassifier():
         creates (x,y), runs it through our PyTorch Model, cuts off the classes that didn't appear in the training data
         and applies softmax to get the probabilities
         """
-        x = np.concatenate((self.X_train, X_test))
+        x = np.concatenate((self.X_train, self.feature_preprocessor.transform(X_test)))
         y = self.y_train
         with torch.no_grad():
             x = torch.from_numpy(x).unsqueeze(0).to(torch.float).to(self.device)  # introduce batch size 1
@@ -76,7 +117,7 @@ class NanoTabPFNClassifier():
 class NanoTabPFNRegressor():
     """ scikit-learn like interface """
     def __init__(self, model: NanoTabPFNModel|str|None = None, dist: FullSupportBarDistribution|str|None = None, device=get_default_device()):
-        if model == None:
+        if model is None:
             model = 'nanotabpfn_regressor.pth'
             dist = 'nanotabpfn_regressor_buckets.pth'
             if not os.path.isfile(model):
@@ -105,7 +146,8 @@ class NanoTabPFNRegressor():
         """
         Stores X_train and y_train for later use. Computes target normalization. Builds normalized bar distribution from existing self.dist.
         """
-        self.X_train = X_train
+        self.feature_preprocessor = get_feature_preprocessor(X_train)
+        self.X_train = self.feature_preprocessor.fit_transform(X_train)
         self.y_train = y_train
 
         self.y_train_mean = np.mean(self.y_train)
@@ -121,7 +163,7 @@ class NanoTabPFNRegressor():
         """
         Performs in-context learning using X_train and y_train. Predicts the means of the output distributions for X_test.
         """
-        X = np.concatenate((self.X_train, X_test))
+        X = np.concatenate((self.X_train, self.feature_preprocessor.transform(X_test)))
         y = self.y_train_n
 
         with torch.no_grad():

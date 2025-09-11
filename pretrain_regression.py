@@ -1,18 +1,16 @@
 import argparse
+
 import torch
+from pfns.bar_distribution import FullSupportBarDistribution
+from sklearn.metrics import r2_score
 
 from nanotabpfn.callbacks import ConsoleLoggerCallback
-from nanotabpfn.priors import PriorDumpDataLoader
+from nanotabpfn.evaluation import get_openml_predictions, TOY_TASKS_REGRESSION
+from nanotabpfn.interface import NanoTabPFNRegressor
 from nanotabpfn.model import NanoTabPFNModel
+from nanotabpfn.priors import PriorDumpDataLoader
 from nanotabpfn.train import train
 from nanotabpfn.utils import get_default_device, set_randomness_seed, make_global_bucket_edges
-from nanotabpfn.interface import NanoTabPFNRegressor
-
-from pfns.bar_distribution import FullSupportBarDistribution
-
-from sklearn.datasets import load_diabetes
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import r2_score
 
 parser = argparse.ArgumentParser()
 
@@ -66,27 +64,22 @@ if ckpt:
 
 dist = FullSupportBarDistribution(bucket_edges)
 
-datasets = []
-datasets.append(train_test_split(*load_diabetes(return_X_y=True), test_size=0.5, random_state=42))
-
-
 class EvaluationLoggerCallback(ConsoleLoggerCallback):
-    def __init__(self, datasets):
-        self.datasets = datasets
+    def __init__(self, tasks):
+        self.tasks = tasks
 
     def on_epoch_end(self, epoch: int, epoch_time: float, loss: float, model, **kwargs):
         regressor = NanoTabPFNRegressor(model, dist, device)
+        predictions = get_openml_predictions(model=regressor, tasks=self.tasks)
         scores = []
-        for X_train, X_test, y_train, y_test in datasets:
-            regressor.fit(X_train, y_train)
-            pred = regressor.predict(X_test)
-            scores.append(r2_score(y_test, pred))
+        for dataset_name, (y_true, y_pred, _) in predictions.items():
+            scores.append(r2_score(y_true, y_pred))
         avg_score = sum(scores) / len(scores)
         print(f'epoch {epoch:5d} | time {epoch_time:5.2f}s | mean loss {loss:5.2f} | avg r2 score {avg_score:.3f}',
               flush=True)
 
 
-callbacks = [EvaluationLoggerCallback(datasets)]
+callbacks = [EvaluationLoggerCallback(TOY_TASKS_REGRESSION)]
 
 trained_model, loss = train(
     model=model,
