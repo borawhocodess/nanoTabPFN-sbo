@@ -14,6 +14,11 @@ def parse_args():
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
+        "--model",
+        type=str,
+        default=None,
+    )
+    parser.add_argument(
         "--seed",
         type=int,
         default=42,
@@ -28,6 +33,7 @@ def parse_args():
         "--vs-tabpfn",
         action="store_true",
     )
+
 
     args = parser.parse_args()
 
@@ -92,13 +98,13 @@ def fit_predict_plot(ax, X, y, models, title=""):
     ax.set_title(title)
 
 
-def visualise_and_save(seed, sampling, vs_tabpfn, plot_filepath):
+def visualise_and_save(model, seed, sampling, vs_tabpfn, plot_filepath):
     ds = generate_datasets(
         seed=seed,
         sampling=sampling,
     )
     ms = [
-        ("NanoTabPFN", NanoTabPFNRegressor()),
+        ("NanoTabPFN", NanoTabPFNRegressor(model=model)),
     ]
     if vs_tabpfn:
         try:
@@ -141,6 +147,7 @@ def main():
     plot_filepath = os.path.join(plot_dir, plot_filename)
 
     visualise_and_save(
+        model=args.model,
         seed=args.seed,
         sampling=args.sampling,
         vs_tabpfn=args.vs_tabpfn,

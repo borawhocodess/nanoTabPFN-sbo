@@ -32,6 +32,30 @@ def init_model_from_state_dict_file(file_path):
     return model
 
 
+def init_model_from_artifact_file(file_path, device=torch.device('cpu')):
+    """
+    initialises from weights file
+    """
+    obj = torch.load(file_path, map_location=device)
+
+    if not (isinstance(obj, dict) and 'state_dict' in obj and 'arch' in obj):
+        raise ValueError("File is not a NanoTabPFN artifact with 'state_dict' and 'arch'.")
+
+    arch = obj['arch']
+    model = NanoTabPFNModel(
+        num_attention_heads=arch['num_attention_heads'],
+        embedding_size=arch['embedding_size'],
+        mlp_hidden_size=arch['mlp_hidden_size'],
+        num_layers=arch['num_layers'],
+        num_outputs=arch['num_outputs'],
+    )
+    model.load_state_dict(obj['state_dict'])
+
+    bucket_edges = obj.get('bucket_edges', None)
+
+    return model, bucket_edges
+
+
 class NanoTabPFNClassifier:
     """
     scikit-learn like interface
@@ -98,27 +122,19 @@ class NanoTabPFNRegressor:
     def __init__(
         self,
         model: NanoTabPFNModel | str | None = None,
-        dist: FullSupportBarDistribution | str | None = None,
+        dist: FullSupportBarDistribution | None = None,
         device=get_default_device(),
     ):
         if model is None:
             model = 'nanotabpfn_regressor.pth'
-            dist = 'nanotabpfn_regressor_buckets.pth'
             if not os.path.isfile(model):
-                print('No cached model found, downloading model checkpoint.')
-                response = requests.get('https://ml.informatik.uni-freiburg.de/research-artifacts/pfefferle/nanoTabPFN/nanotabpfn_regressor.pth')
+                print('No cached model found, downloading model artifact.')
+                response = requests.get('https://blablabla/nanotabpfn_regressor.pth') # TODO: fix link
                 with open(model, 'wb') as f:
                     f.write(response.content)
-            if not os.path.isfile(dist):
-                print('No cached bucket edges found, downloading bucket edges.')
-                response = requests.get('https://ml.informatik.uni-freiburg.de/research-artifacts/pfefferle/nanoTabPFN/nanotabpfn_regressor_buckets.pth')
-                with open(dist, 'wb') as f:
-                    f.write(response.content)
-        if isinstance(model, str):
-            model = init_model_from_state_dict_file(model)
 
-        if isinstance(dist, str):
-            bucket_edges = torch.load(dist, map_location=device)
+        if isinstance(model, str):
+            model, bucket_edges = init_model_from_artifact_file(model, device=torch.device('cpu'))
             dist = FullSupportBarDistribution(bucket_edges).float()
 
         self.model = model.to(device)

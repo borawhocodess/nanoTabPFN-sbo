@@ -1,6 +1,7 @@
 # scripts/utils.py
 
 import os
+import uuid
 from datetime import datetime
 
 
@@ -12,6 +13,10 @@ def pxp(x):
 
 def get_timestamp():
     return datetime.now().strftime("%Y%m%d_%H%M%S")
+
+
+def get_uuid4():
+    return str(uuid.uuid4())
 
 
 def get_target_dir(*subdirs, verbose=False):
