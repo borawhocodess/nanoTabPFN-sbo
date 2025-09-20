@@ -29,26 +29,32 @@ class NanoTabPFNModel(nn.Module):
     def forward(self, *args, **kwargs) -> torch.Tensor:
         """
         Provides two interfaces:
+
         model(X_train, y_train, X_test)
             Args:
-                X_train: (torch.Tensor) a tensor of shape (batch_size, num_train_datapoints, num_features)
-                y_train: (torch.Tensor) a tensor of shape (batch_size, num_train_datapoints, 1)
-                X_test: (torch.Tensor) a tensor of shape (batch_size, num_test_datapoints, num_features)
+                X_train (torch.Tensor):
+                    a tensor of shape (batch_size, num_train_datapoints, num_features)
+                y_train (torch.Tensor):
+                    a tensor of shape (batch_size, num_train_datapoints, 1)
+                X_test (torch.Tensor):
+                    a tensor of shape (batch_size, num_test_datapoints, num_features)
 
         model((x,y), single_eval_pos)
             Args:
-                x: (torch.Tensor) a tensor of shape (batch_size, num_datapoints, num_features)
-                y: (torch.Tensor) a tensor of shape (batch_size, num_train_datapoints, 1)
-
+                x (torch.Tensor):
+                    a tensor of shape (batch_size, num_datapoints, num_features)
+                y (torch.Tensor):
+                    a tensor of shape (batch_size, num_train_datapoints, 1)
 
         The former is similar to the sklearn interface.
-        In the latter x is the concatenation of X_train and X_test, y is y_train and single_eval_pos is the length of X_train.
-        Our model internally works with the latter representation, so we convert the former into the latter and forward it to
-        _forward.
+        In the latter x is the concatenation of X_train and X_test,
+        y is y_train and single_eval_pos is the length of X_train.
+        Our model internally works with the latter representation,
+        so we convert the former into the latter and forward it to _forward.
 
         Returns:
-            (torch.Tensor) a tensor of shape (batch_size, num_test_datapoints, num_classes),
-                           which represent the predicted logits
+            (torch.Tensor):
+                a tensor of shape (batch_size, num_test_datapoints, num_classes), which represent the predicted logits
         """
         if len(args) == 3:
             # case model(train_x, train_y, test_x)
@@ -102,11 +108,15 @@ class FeatureEncoder(nn.Module):
         clips them between -100 and 100, then applies a linear layer to embed the features.
 
         Args:
-            x: (torch.Tensor) a tensor of shape (batch_size, num_rows, num_features)
-            single_eval_pos: (int) the number of datapoints in X_train
+            x (torch.Tensor):
+                a tensor of shape (batch_size, num_rows, num_features)
+            single_eval_pos (int):
+                the number of datapoints in X_train
+
         Returns:
-            (torch.Tensor) a tensor of shape (batch_size, num_rows, num_features, embedding_size), representing
-                           the embeddings of the features
+            (torch.Tensor):
+                a tensor of shape (batch_size, num_rows, num_features, embedding_size),
+                representing the embeddings of the features
         """
         x = x.unsqueeze(-1)
         mean = torch.mean(x[:, :single_eval_pos], axis=1, keepdims=True)
@@ -129,11 +139,15 @@ class TargetEncoder(nn.Module):
         Padds up y_train to the full length of y using the mean per dataset and then embeds it using a linear layer
 
         Args:
-            y_train: (torch.Tensor) a tensor of shape (batch_size, num_train_datapoints, 1)
-            num_rows: (int) the full length of y
+            y_train (torch.Tensor):
+                a tensor of shape (batch_size, num_train_datapoints, 1)
+            num_rows (int):
+                the full length of y
+
         Returns:
-            (torch.Tensor) a tensor of shape (batch_size, num_rows, 1, embedding_size), representing
-                           the embeddings of the targets
+            (torch.Tensor):
+                a tensor of shape (batch_size, num_rows, 1, embedding_size),
+                representing the embeddings of the targets
         """
         # nan padding & nan handler instead?
         mean = torch.mean(y_train, axis=1, keepdim=True)
@@ -164,11 +178,15 @@ class TransformerEncoderStack(nn.Module):
         Takes the embeddings of all the cells of the table as input and applies num_layers many Transformer blocks.
 
         Args:
-            x: (torch.Tensor) a tensor of shape (batch_size, num_rows, num_features, embedding_size) that contains all the embeddings
-                              for all the cells in the table
-            single_eval_position: (int) the length of X_train
-        Returns
-            (torch.Tensor) a tensor of shape (batch_size, num_rows, num_features, embedding_size)
+            x (torch.Tensor):
+                a tensor of shape (batch_size, num_rows, num_features, embedding_size)
+                that contains all the embeddings for all the cells in the table
+            single_eval_position (int):
+                the length of X_train
+
+        Returns:
+            (torch.Tensor):
+                a tensor of shape (batch_size, num_rows, num_features, embedding_size)
         """
         for block in self.transformer_blocks:
             x = block(x, single_eval_position=single_eval_position)
@@ -203,15 +221,20 @@ class TransformerEncoderLayer(nn.Module):
 
     def forward(self, src: torch.Tensor, single_eval_position: int) -> torch.Tensor:
         """
-        Takes the embeddings of the table as input and applies self-attention between features and self-attention between datapoints
+        Takes the embeddings of the table as input and applies
+        self-attention between features and self-attention between datapoints
         followed by a simple 2 layer MLP.
 
         Args:
-            src: (torch.Tensor) a tensor of shape (batch_size, num_rows, num_features, embedding_size) that contains all the embeddings
-                                for all the cells in the table
-            single_eval_position: (int) the length of X_train
-        Returns
-            (torch.Tensor) a tensor of shape (batch_size, num_rows, num_features, embedding_size)
+            src (torch.Tensor):
+                a tensor of shape (batch_size, num_rows, num_features, embedding_size)
+                that contains all the embeddings for all the cells in the table
+            single_eval_position (int):
+                the length of X_train
+
+        Returns:
+            (torch.Tensor):
+                a tensor of shape (batch_size, num_rows, num_features, embedding_size)
         """
         batch_size, rows_size, col_size, embedding_size = src.shape
         # attention between features
@@ -250,8 +273,11 @@ class Decoder(nn.Module):
         Applies an MLP to the embeddings to get the logits
 
         Args:
-            x: (torch.Tensor) a tensor of shape (batch_size, num_rows, embedding_size)
+            x (torch.Tensor):
+                a tensor of shape (batch_size, num_rows, embedding_size)
+
         Returns:
-            (torch.Tensor) a tensor of shape (batch_size, num_rows, num_outputs)
+            (torch.Tensor):
+                a tensor of shape (batch_size, num_rows, num_outputs)
         """
         return self.linear2(F.gelu(self.linear1(x)))

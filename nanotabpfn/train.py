@@ -29,18 +29,26 @@ def train(
     Trains our model on the given prior using the given criterion.
 
     Args:
-        model: (NanoTabPFNModel) our PyTorch model
-        prior: (DataLoader) torch-compatible dataloader
-        criterion: (nn.CrossEntropyLoss | FullSupportBarDistribution) our loss criterion
-        epochs: (int) the number of epochs we train for, the number of steps that constitute an epoch are decided by the prior
-        accumulate_gradients: (int) the number of gradients to accumulate before updating the weights
-        device: (torch.device) the device we are using
-        epoch_callback: (Callable[[int, float, float, NanoTabPFNModel], None]) optional callback function that will be called
-                        at the end of each epoch with the current epoch, epoch duration, mean loss, and the model,
-                        intended to be used for logging/validation/evaluation
+        model (NanoTabPFNModel):
+            our PyTorch model
+        prior (DataLoader):
+            torch-compatible dataloader
+        criterion (nn.CrossEntropyLoss | FullSupportBarDistribution):
+            our loss criterion
+        epochs (int):
+            the number of epochs we train for, the number of steps that constitute an epoch are decided by the prior
+        accumulate_gradients (int):
+            the number of gradients to accumulate before updating the weights
+        device (torch.device):
+            the device we are using
+        epoch_callback (Callable[[int, float, float, NanoTabPFNModel], None]):
+            optional callback function that will be called at the end of each epoch with
+            the current epoch, epoch duration, mean loss, and the model,
+            intended to be used for logging/validation/evaluation
 
     Returns:
-        (torch.Tensor) a tensor of shape (num_rows, batch_size, num_features, embedding_size)
+        (torch.Tensor):
+            a tensor of shape (num_rows, batch_size, num_features, embedding_size)
     """
     # print(f"Using a Transformer with {sum(p.numel() for p in model.parameters())/1000/1000:.{2}f} M parameters")
     if not device:
