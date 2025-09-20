@@ -1,25 +1,8 @@
 import argparse
-import json
-import os
-import sys
-
-import sklearn
-import torch
 
 from pfns.model.bar_distribution import FullSupportBarDistribution
-from sklearn.datasets import (
-    fetch_california_housing,
-    load_breast_cancer,
-    load_diabetes,
-    load_iris,
-    load_wine,
-    make_regression,
-)
-from sklearn.metrics import accuracy_score, r2_score
-from sklearn.model_selection import train_test_split
 from torch import nn
 
-from nanotabpfn.interface import NanoTabPFNClassifier, NanoTabPFNRegressor
 from nanotabpfn.model import NanoTabPFNModel
 from nanotabpfn.priors import PriorDumpDataLoader
 from nanotabpfn.train import train
@@ -29,59 +12,9 @@ from nanotabpfn.utils import (
     set_randomness_seed,
 )
 
-from utils import get_timestamp, get_uuid4, pxp
-
-
-class PretrainMetadataLogger:
-    def __init__(self, args, device, metric_field):
-        self.timestamp = get_timestamp()
-        self.uuid = get_uuid4()
-
-        self.metadata_path = f"other/metadata/pretrain_metadata_{self.timestamp}.json"
-        os.makedirs(os.path.dirname(self.metadata_path), exist_ok=True)
-
-        self.metric_field = metric_field
-
-        self.entry = {
-            "meta": {
-                "timestamp": self.timestamp,
-                "uuid4": self.uuid,
-                "version": "0.0",
-                "completed": False,
-                "task_type": args.type,
-            },
-            "args": vars(args),
-            "env": {
-                "device": str(device),
-                "python": sys.version.split()[0],
-                "torch": getattr(torch, "__version__", None),
-                "sklearn": getattr(sklearn, "__version__", None),
-            },
-            "epochs": {},
-        }
-
-        self._write()
-
-    def log_epoch(self, epoch, epoch_time, mean_loss, metric_value):
-        epoch_key = str(int(epoch))
-        self.entry["epochs"][epoch_key] = {
-            "epoch": int(epoch),
-            "epoch_time": float(epoch_time),
-            "mean_loss": float(mean_loss),
-            self.metric_field: float(metric_value),
-        }
-        self._write()
-
-    def mark_completed(self, expected_final_epoch):
-        recorded_epochs = {int(epoch_key) for epoch_key in self.entry["epochs"].keys()}
-        completed = expected_final_epoch in recorded_epochs
-
-        self.entry["meta"]["completed"] = completed
-        self._write()
-
-    def _write(self):
-        with open(self.metadata_path, "w", encoding="utf-8") as metadata_file:
-            json.dump(self.entry, metadata_file, indent=2, sort_keys=False)
+# these are from other scripts
+from utils import pxp, RunManager
+from evaluate import build_eval_datasets, run_evaluation
 
 
 def parse_arguments():
@@ -91,7 +24,7 @@ def parse_arguments():
         "-type",
         type=str,
         choices=("regression", "classification"),
-        default="regression",
+        default="classification",
         help="pretraining task type",
     )
     parser.add_argument(
@@ -177,18 +110,22 @@ def parse_arguments():
         type=int,
         default=42,
     )
+    parser.add_argument(
+        "-verbose",
+        action="store_true",
+    )
 
     args = parser.parse_args()
 
     defaults = {
+        "classification": {
+            "priordump": "other/dumps/50x3_3_100k_classification.h5",
+            "saveweights": "other/model/nanotabpfn_classifier.pth",
+        },
         "regression": {
             "priordump": "other/dumps/50x3_1280k_regression.h5",
             "saveweights": "other/model/nanotabpfn_regressor.pth",
             "n_buckets": 100,  # 5000
-        },
-        "classification": {
-            "priordump": "other/dumps/50x3_3_100k_classification.h5",
-            "saveweights": "other/model/nanotabpfn_classifier.pth",
         },
     }
 
@@ -200,189 +137,89 @@ def parse_arguments():
     if args.saveweights is None:
         args.saveweights = type_defaults["saveweights"]
 
-    if args.seed is None:
-        args.seed = type_defaults["seed"]
-
     if args.type == "regression" and args.n_buckets is None:
         args.n_buckets = type_defaults["n_buckets"]
 
     return args
 
 
-def build_eval_datasets(task_type, seed):
-    datasets = []
-
-    if task_type == "regression":
-        datasets.append(
-            train_test_split(
-                *load_diabetes(return_X_y=True),
-                test_size=0.5,
-                random_state=seed,
-            )
-        )
-
-        X, y = fetch_california_housing(return_X_y=True)
-        X_sub, _, y_sub, _ = train_test_split(X, y, train_size=500, random_state=seed)
-        datasets.append(
-            train_test_split(
-                X_sub,
-                y_sub,
-                test_size=0.5,
-                random_state=seed,
-            )
-        )
-
-        X, y = make_regression(n_samples=500, n_features=10, random_state=seed)
-        datasets.append(
-            train_test_split(
-                X,
-                y,
-                test_size=0.5,
-                random_state=seed,
-            )
-        )
-    else:
-        datasets.append(
-            train_test_split(
-                *load_iris(return_X_y=True),
-                test_size=0.5,
-                random_state=seed,
-            )
-        )
-        datasets.append(
-            train_test_split(
-                *load_wine(return_X_y=True),
-                test_size=0.5,
-                random_state=seed,
-            )
-        )
-        datasets.append(
-            train_test_split(
-                *load_breast_cancer(return_X_y=True),
-                test_size=0.5,
-                random_state=seed,
-            )
-        )
-
-    return datasets
-
-
-def run_evaluation(task_type, model, dist, device, eval_datasets):
-    scores = []
-
-    if task_type == "regression":
-        regressor = NanoTabPFNRegressor(model, dist, device)
-        for X_train, X_test, y_train, y_test in eval_datasets:
-            regressor.fit(X_train, y_train)
-            predictions = regressor.predict(X_test)
-            scores.append(r2_score(y_test, predictions))
-    else:
-        classifier = NanoTabPFNClassifier(model, device)
-        for X_train, X_test, y_train, y_test in eval_datasets:
-            classifier.fit(X_train, y_train)
-            predictions = classifier.predict(X_test)
-            scores.append(accuracy_score(y_test, predictions))
-
-    return sum(scores) / len(scores)
-
-
-def save_artifact(trained_model, bucket_edges, args, metadata_logger, num_outputs):
-    artifact = {
-        "state_dict": trained_model.to("cpu").state_dict(),
-        "arch": {
-            "num_attention_heads": args.heads,
-            "embedding_size": args.embeddingsize,
-            "mlp_hidden_size": args.hiddensize,
-            "num_layers": args.layers,
-            "num_outputs": num_outputs,
-        },
-        "meta": {
-            "timestamp": metadata_logger.timestamp,
-            "uuid4": metadata_logger.uuid,
-            "version": "0.0",
-            "task_type": args.type,
-        },
-    }
-
-    if bucket_edges is not None:
-        artifact["bucket_edges"] = bucket_edges.to("cpu")
-
-    base, ext = os.path.splitext(args.saveweights)
-    ext = ext if ext in {".pth", ".pt"} else ".pth"
-    save_path = f"{base}_{metadata_logger.timestamp}{ext}"
-
-    torch.save(artifact, save_path)
-
-
 def main():
     args = parse_arguments()
-
-    assert args.steps % args.accumulate == 0, "steps MUST be divisible by accumulate!"
-
-    os.makedirs(os.path.dirname(args.saveweights), exist_ok=True)
 
     set_randomness_seed(args.seed)
 
     device = get_default_device()
 
-    pxp(f"device: {device}")
+    manager = RunManager(args=args, device=device)
 
-    ckpt = None
+    ckpt = manager.resume_checkpoint
 
-    if args.loadcheckpoint:
-        ckpt = torch.load(args.loadcheckpoint)
+    start_epoch = manager.resume_epoch
 
     prior = PriorDumpDataLoader(
         filename=args.priordump,
         num_steps=args.steps,
         batch_size=args.batchsize,
         device=device,
-        starting_index=args.steps * (ckpt["epoch"] if ckpt else 0),
+        starting_index=args.steps * start_epoch,
     )
 
-    if args.type == "regression":
-        bucket_edges = make_global_bucket_edges(
-            filename=args.priordump,
-            n_buckets=args.n_buckets,
-            device=device,
-        )
-        criterion = FullSupportBarDistribution(bucket_edges)
-        num_outputs = args.n_buckets
-        metric_name = "avg_r2"
-    else:
+    saved_bucket_edges = manager.bucket_edges
+
+    if args.type == "classification":
         bucket_edges = None
         criterion = nn.CrossEntropyLoss()
         num_outputs = prior.max_num_classes
         metric_name = "avg_accuracy"
+        metric = "μacc"
+    else:
+        bucket_edges = (
+            saved_bucket_edges
+            if saved_bucket_edges is not None
+            else make_global_bucket_edges(
+                filename=args.priordump,
+                n_buckets=args.n_buckets,
+                device=device,
+            )
+        )
+        criterion = FullSupportBarDistribution(bucket_edges)
+        num_outputs = args.n_buckets
+        metric_name = "avg_r2"
+        metric = "μr2"
+
+    manager.update_bucket_edges(bucket_edges)
+
+    arch = manager.arch or {
+        "num_attention_heads": args.heads,
+        "embedding_size": args.embeddingsize,
+        "mlp_hidden_size": args.hiddensize,
+        "num_layers": args.layers,
+        "num_outputs": num_outputs,
+    }
+
+    manager.update_arch(arch)
 
     model = NanoTabPFNModel(
-        num_attention_heads=args.heads,
-        embedding_size=args.embeddingsize,
-        mlp_hidden_size=args.hiddensize,
-        num_layers=args.layers,
-        num_outputs=num_outputs,
+        num_attention_heads=arch["num_attention_heads"],
+        embedding_size=arch["embedding_size"],
+        mlp_hidden_size=arch["mlp_hidden_size"],
+        num_layers=arch["num_layers"],
+        num_outputs=arch["num_outputs"],
     )
 
     if ckpt:
-        model.load_state_dict(ckpt["model"])
+        model.load_state_dict(ckpt["model"]["state_dict"])
 
     eval_datasets = build_eval_datasets(task_type=args.type, seed=args.seed)
 
-    metadata_logger = PretrainMetadataLogger(args, device, metric_field=metric_name)
+    def epoch_callback(epoch, epoch_time, mean_loss, model, optimizer_state, dist=None):
+        score = run_evaluation(args.type, model, dist, device, eval_datasets)
+        
+        print(f"e {epoch:5d} | t: {epoch_time:5.2f}s | μl: {mean_loss:5.2f} | {metric}: {score:5.2f}", flush=True)
 
-    def epoch_callback(epoch, epoch_time, mean_loss, model, dist=None):
-        avg_score = run_evaluation(args.type, model, dist, device, eval_datasets)
-        if args.type == "regression":
-            metric_label = "μr2"
-            metric_display = f"{avg_score:5.2f}"
-        else:
-            metric_label = "μacc"
-            metric_display = f"{avg_score:5.2f}"
-        print(
-            f"e {epoch:5d} | t: {epoch_time:5.2f}s | μl: {mean_loss:5.2f} | {metric_label}: {metric_display}",
-            flush=True,
-        )
-        metadata_logger.log_epoch(epoch, epoch_time, mean_loss, avg_score)
+        manager.metadatahandler.log_epoch(epoch, epoch_time, mean_loss, metric_name, score)
+
+        manager.artifacthandler.save_checkpoint(model, optimizer_state, epoch)
 
     trained_model, loss = train(
         model=model,
@@ -396,11 +233,19 @@ def main():
         ckpt=ckpt,
     )
 
-    save_artifact(trained_model, bucket_edges, args, metadata_logger, num_outputs)
+    manager.artifacthandler.save_artifact(trained_model)
 
-    metadata_logger.mark_completed(args.epochs)
+    manager.metadatahandler.mark_completed(args.epochs)
 
-    pxp(f"metadata logged to: {metadata_logger.metadata_path}")
+    pxp(
+        "metadata logged to: "
+        f"{manager.metadatahandler.metadata_path}\n"
+        "checkpoint saved to: "
+        f"{manager.latest_checkpoint_path}\n"
+        "artifact saved to: "
+        f"{manager.latest_artifact_path}",
+        on=args.verbose,
+    )
 
 
 if __name__ == "__main__":

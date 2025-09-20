@@ -1,4 +1,3 @@
-import os
 import time
 from typing import Callable, Dict
 
@@ -21,7 +20,7 @@ def train(
     lr: float = 1e-4,
     device: torch.device = None,
     epoch_callback: Callable[
-        [int, float, float, NanoTabPFNModel, FullSupportBarDistribution | None], None
+        [int, float, float, NanoTabPFNModel, Dict | None, FullSupportBarDistribution | None], None
     ] = None,
     ckpt: Dict[str, torch.Tensor] = None,
 ):
@@ -29,18 +28,26 @@ def train(
     Trains our model on the given prior using the given criterion.
 
     Args:
-        model: (NanoTabPFNModel) our PyTorch model
-        prior: (DataLoader) torch-compatible dataloader
-        criterion: (nn.CrossEntropyLoss | FullSupportBarDistribution) our loss criterion
-        epochs: (int) the number of epochs we train for, the number of steps that constitute an epoch are decided by the prior
-        accumulate_gradients: (int) the number of gradients to accumulate before updating the weights
-        device: (torch.device) the device we are using
-        epoch_callback: (Callable[[int, float, float, NanoTabPFNModel], None]) optional callback function that will be called
-                        at the end of each epoch with the current epoch, epoch duration, mean loss, and the model,
-                        intended to be used for logging/validation/evaluation
+        model (NanoTabPFNModel):
+            our PyTorch model
+        prior (DataLoader):
+            torch-compatible dataloader
+        criterion (nn.CrossEntropyLoss | FullSupportBarDistribution):
+            our loss criterion
+        epochs (int):
+            the number of epochs we train for, the number of steps that constitute an epoch are decided by the prior
+        accumulate_gradients (int):
+            the number of gradients to accumulate before updating the weights
+        device (torch.device):
+            the device we are using
+        epoch_callback (Callable[[int, float, float, NanoTabPFNModel, Dict | None, FullSupportBarDistribution | None], None]):
+            optional callback function that will be called at the end of each epoch with
+            the current epoch, epoch duration, mean loss, the model, optimizer state dict,
+            intended to be used for logging/validation/evaluation
 
     Returns:
-        (torch.Tensor) a tensor of shape (num_rows, batch_size, num_features, embedding_size)
+        (torch.Tensor):
+            a tensor of shape (num_rows, batch_size, num_features, embedding_size)
     """
     # print(f"Using a Transformer with {sum(p.numel() for p in model.parameters())/1000/1000:.{2}f} M parameters")
     if not device:
@@ -55,14 +62,21 @@ def train(
     )
 
     if ckpt:
-        optimizer.load_state_dict(ckpt["optimizer"])
+        optimizer.load_state_dict(ckpt["resume"]["optimizer"])
+
+        for state in optimizer.state.values():  # ?
+            for k, v in state.items():
+                if torch.is_tensor(v):
+                    state[k] = v.to(device)
 
     classification_task = isinstance(criterion, nn.CrossEntropyLoss)
 
-    assert prior.num_steps % accumulate_gradients == 0, 'num_steps must be divisible by accumulate_gradients'
+    assert prior.num_steps % accumulate_gradients == 0, "num_steps must be divisible by accumulate_gradients"
 
     try:
-        for epoch in range(ckpt["epoch"] + 1 if ckpt else 1, epochs + 1):
+        start_epoch = ckpt["resume"]["epoch"] + 1 if ckpt else 1
+
+        for epoch in range(start_epoch, epochs + 1):
             start_time = time.time()
 
             model.train()
@@ -109,20 +123,24 @@ def train(
             model.eval()
             optimizer.eval()
 
-            training_state = {
-                "epoch": epoch,
-                "model": model.state_dict(),
-                "optimizer": optimizer.state_dict(),
-            }
-            os.makedirs(os.path.dirname("other/checkpoints/latest_checkpoint.pth"), exist_ok=True)
-            torch.save(training_state, 'other/checkpoints/latest_checkpoint.pth')
-
-
             if epoch_callback:
                 if type(criterion) is FullSupportBarDistribution:
-                    epoch_callback(epoch, end_time - start_time, mean_loss, model, dist=criterion)
+                    epoch_callback(
+                        epoch,
+                        end_time - start_time,
+                        mean_loss,
+                        model,
+                        optimizer.state_dict(),
+                        dist=criterion,
+                    )
                 else:
-                    epoch_callback(epoch, end_time - start_time, mean_loss, model)
+                    epoch_callback(
+                        epoch,
+                        end_time - start_time,
+                        mean_loss,
+                        model,
+                        optimizer.state_dict(),
+                    )
 
     except KeyboardInterrupt:
         pass
