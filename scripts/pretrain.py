@@ -332,6 +332,9 @@ def main():
     if args.loadcheckpoint:
         ckpt = torch.load(args.loadcheckpoint)
 
+    if not args.priordump or not os.path.isfile(args.priordump):
+        raise FileNotFoundError(f"Prior dump not found at {args.priordump!r}")
+
     prior = PriorDumpDataLoader(
         filename=args.priordump,
         num_steps=args.steps,
