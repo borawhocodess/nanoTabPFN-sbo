@@ -4,6 +4,7 @@ import numpy as np
 import requests
 import torch
 import torch.nn.functional as F
+
 from pfns.model.bar_distribution import FullSupportBarDistribution
 
 from nanotabpfn.model import NanoTabPFNModel
@@ -15,12 +16,12 @@ def init_model_from_state_dict_file(file_path):
     infers model architecture from state dict,
     instantiates the architecture and loads the weights
     """
-    state_dict = torch.load(file_path, map_location=torch.device('cpu'))
-    embedding_size = state_dict['feature_encoder.linear_layer.weight'].shape[0]
-    mlp_hidden_size = state_dict['decoder.linear1.weight'].shape[0]
-    num_outputs = state_dict['decoder.linear2.weight'].shape[0]
-    num_layers = sum('self_attn_between_datapoints.in_proj_weight' in k for k in state_dict)
-    num_heads = state_dict['transformer_encoder.transformer_blocks.0.self_attn_between_datapoints.in_proj_weight'].shape[1]//64
+    state_dict = torch.load(file_path, map_location=torch.device("cpu"))
+    embedding_size = state_dict["feature_encoder.linear_layer.weight"].shape[0]
+    mlp_hidden_size = state_dict["decoder.linear1.weight"].shape[0]
+    num_outputs = state_dict["decoder.linear2.weight"].shape[0]
+    num_layers = sum("self_attn_between_datapoints.in_proj_weight" in k for k in state_dict)
+    num_heads = (state_dict["transformer_encoder.transformer_blocks.0.self_attn_between_datapoints.in_proj_weight"].shape[1] // 64)
     model = NanoTabPFNModel(
         num_attention_heads=num_heads,
         embedding_size=embedding_size,
@@ -28,30 +29,30 @@ def init_model_from_state_dict_file(file_path):
         num_layers=num_layers,
         num_outputs=num_outputs,
     )
-    model.load_state_dict(torch.load(file_path, map_location='cpu'))
+    model.load_state_dict(torch.load(file_path, map_location="cpu"))
     return model
 
 
-def init_model_from_artifact_file(file_path, device=torch.device('cpu')):
+def init_model_from_artifact_file(file_path, device=torch.device("cpu")):
     """
     initialises from weights file
     """
     obj = torch.load(file_path, map_location=device)
 
-    if not (isinstance(obj, dict) and 'state_dict' in obj and 'arch' in obj):
+    if not (isinstance(obj, dict) and "state_dict" in obj and "arch" in obj):
         raise ValueError("File is not a NanoTabPFN artifact with 'state_dict' and 'arch'.")
 
-    arch = obj['arch']
+    arch = obj["arch"]
     model = NanoTabPFNModel(
-        num_attention_heads=arch['num_attention_heads'],
-        embedding_size=arch['embedding_size'],
-        mlp_hidden_size=arch['mlp_hidden_size'],
-        num_layers=arch['num_layers'],
-        num_outputs=arch['num_outputs'],
+        num_attention_heads=arch["num_attention_heads"],
+        embedding_size=arch["embedding_size"],
+        mlp_hidden_size=arch["mlp_hidden_size"],
+        num_layers=arch["num_layers"],
+        num_outputs=arch["num_outputs"],
     )
-    model.load_state_dict(obj['state_dict'])
+    model.load_state_dict(obj["state_dict"])
 
-    bucket_edges = obj.get('bucket_edges', None)
+    bucket_edges = obj.get("bucket_edges", None)
 
     return model, bucket_edges
 
@@ -67,11 +68,11 @@ class NanoTabPFNClassifier:
         device=get_default_device(),
     ):
         if model is None:
-            model = 'nanotabpfn.pth'
+            model = "nanotabpfn.pth"
             if not os.path.isfile(model):
-                print('No cached model found, downloading model checkpoint.')
-                response = requests.get('https://ml.informatik.uni-freiburg.de/research-artifacts/pfefferle/nanoTabPFN/nanotabpfn_classifier.pth')
-                with open(model, 'wb') as f:
+                print("No cached model found, downloading model checkpoint.")
+                response = requests.get("https://ml.informatik.uni-freiburg.de/research-artifacts/pfefferle/nanoTabPFN/nanotabpfn_classifier.pth")
+                with open(model, "wb") as f:
                     f.write(response.content)
         if isinstance(model, str):
             model = init_model_from_state_dict_file(model)
@@ -85,7 +86,7 @@ class NanoTabPFNClassifier:
         """
         self.X_train = X_train
         self.y_train = y_train
-        self.num_classes = max(set(y_train))+1
+        self.num_classes = max(set(y_train)) + 1
 
     def predict(self, X_test: np.array) -> np.array:
         """
@@ -108,7 +109,7 @@ class NanoTabPFNClassifier:
             y = torch.as_tensor(y, dtype=torch.float32, device=self.device).unsqueeze(0)
             out = self.model((x, y), single_eval_pos=len(self.X_train)).squeeze(0)  # remove batch size 1
             # our pretrained classifier supports up to num_outputs classes, if the dataset has less we cut off the rest
-            out = out[:, :self.num_classes]
+            out = out[:, : self.num_classes]
             # apply softmax to get a probability distribution
             probabilities = F.softmax(out, dim=1)
             return probabilities.cpu().numpy()
@@ -126,15 +127,15 @@ class NanoTabPFNRegressor:
         device=get_default_device(),
     ):
         if model is None:
-            model = 'nanotabpfn_regressor.pth'
+            model = "nanotabpfn_regressor.pth"
             if not os.path.isfile(model):
-                print('No cached model found, downloading model artifact.')
-                response = requests.get('https://blablabla/nanotabpfn_regressor.pth') # TODO: fix link
-                with open(model, 'wb') as f:
+                print("No cached model found, downloading model artifact.")
+                response = requests.get("https://blablabla/nanotabpfn_regressor.pth")  # TODO: fix link
+                with open(model, "wb") as f:
                     f.write(response.content)
 
         if isinstance(model, str):
-            model, bucket_edges = init_model_from_artifact_file(model, device=torch.device('cpu'))
+            model, bucket_edges = init_model_from_artifact_file(model, device=torch.device("cpu"))
             dist = FullSupportBarDistribution(bucket_edges).float()
 
         self.model = model.to(device)

@@ -1,22 +1,33 @@
-import h5py
 import random
-import torch
+
+import h5py
 import numpy as np
+import torch
 
 from pfns.model.bar_distribution import get_bucket_borders
+
 
 def set_randomness_seed(seed):
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
 
+
 def get_default_device():
-    device = 'cpu'
-    if torch.backends.mps.is_available(): device = 'mps'
-    if torch.cuda.is_available(): device = 'cuda'
+    device = "cpu"
+    if torch.backends.mps.is_available():
+        device = "mps"
+    if torch.cuda.is_available():
+        device = "cuda"
     return device
 
-def make_global_bucket_edges(filename, n_buckets=100, device=get_default_device(), max_y=5_000_000):
+
+def make_global_bucket_edges(
+    filename,
+    n_buckets=100,
+    device=get_default_device(),
+    max_y=5_000_000,
+):
     with h5py.File(filename, "r") as f:
         y = f["y"]
         num_tables, num_datapoints = y.shape
@@ -26,7 +37,7 @@ def make_global_bucket_edges(filename, n_buckets=100, device=get_default_device(
             ys_concat = y[...].reshape(-1)
         else:
             full_rows = max_y // num_datapoints
-            rem =  max_y % num_datapoints
+            rem = max_y % num_datapoints
 
             parts = []
             if full_rows > 0:
