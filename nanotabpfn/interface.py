@@ -5,7 +5,6 @@ import pandas as pd
 import requests
 import torch
 import torch.nn.functional as F
-from numpy import ndarray
 from pfns.bar_distribution import FullSupportBarDistribution
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
@@ -36,7 +35,7 @@ def init_model_from_state_dict_file(file_path):
     model.load_state_dict(torch.load(file_path, map_location='cpu'))
     return model
 
-def get_feature_preprocessor(X: ndarray | pd.DataFrame) -> ColumnTransformer:
+def get_feature_preprocessor(X: np.ndarray | pd.DataFrame) -> ColumnTransformer:
     """
     fits a preprocessor that imputes NaNs, encodes categorical features and removes constant features
     """
@@ -51,7 +50,6 @@ def get_feature_preprocessor(X: ndarray | pd.DataFrame) -> ColumnTransformer:
             continue
         non_nan_entries = X[col].notna().sum()
         numeric_entries = pd.to_numeric(X[col], errors='coerce').notna().sum() # in case numeric columns are stored as strings
-
         num_mask.append(non_nan_entries == numeric_entries)
         cat_mask.append(non_nan_entries != numeric_entries)
         # num_mask.append(is_numeric_dtype(X[col]))  # Assumes pandas dtype is correct
@@ -96,19 +94,19 @@ class NanoTabPFNClassifier():
         self.device = device
         self.num_mem_chunks = num_mem_chunks
 
-    def fit(self, X_train: np.array, y_train: np.array):
+    def fit(self, X_train: np.ndarray, y_train: np.ndarray):
         """ stores X_train and y_train for later use, also computes the highest class number occuring in num_classes """
         self.feature_preprocessor = get_feature_preprocessor(X_train)
         self.X_train = self.feature_preprocessor.fit_transform(X_train)
         self.y_train = y_train
         self.num_classes = max(set(y_train))+1
 
-    def predict(self, X_test: np.array) -> np.array:
+    def predict(self, X_test: np.ndarray) -> np.ndarray:
         """ calls predit_proba and picks the class with the highest probability for each datapoint """
         predicted_probabilities = self.predict_proba(X_test)
         return predicted_probabilities.argmax(axis=1)
 
-    def predict_proba(self, X_test: np.array) -> np.array:
+    def predict_proba(self, X_test: np.ndarray) -> np.ndarray:
         """
         creates (x,y), runs it through our PyTorch Model, cuts off the classes that didn't appear in the training data
         and applies softmax to get the probabilities
@@ -157,7 +155,7 @@ class NanoTabPFNRegressor():
         self.normalized_dist = None  # Used after fit()
         self.num_mem_chunks = num_mem_chunks
 
-    def fit(self, X_train: np.array, y_train: np.array):
+    def fit(self, X_train: np.ndarray, y_train: np.ndarray):
         """
         Stores X_train and y_train for later use. Computes target normalization. Builds normalized bar distribution from existing self.dist.
         """
@@ -174,7 +172,7 @@ class NanoTabPFNRegressor():
         bucket_edges_denorm = bucket_edges * self.y_train_std + self.y_train_mean
         self.normalized_dist = FullSupportBarDistribution(bucket_edges_denorm).float()
 
-    def predict(self, X_test: np.array) -> np.array:
+    def predict(self, X_test: np.ndarray) -> np.ndarray:
         """
         Performs in-context learning using X_train and y_train. Predicts the means of the output distributions for X_test.
         """
