@@ -80,8 +80,10 @@ def get_feature_preprocessor(X: ndarray | pd.DataFrame) -> ColumnTransformer:
 
 class NanoTabPFNClassifier():
     """ scikit-learn like interface """
-    def __init__(self, model: NanoTabPFNModel|str|None = None, device=get_default_device()):
-        if model == None:
+    def __init__(self, model: NanoTabPFNModel|str|None = None, device: None|str|torch.device = None, num_mem_chunks: int = 8):
+        if device is None:
+            device = get_default_device()
+        if model is None:
             model = 'nanotabpfn.pth'
             if not os.path.isfile(model):
                 print('No cached model found, downloading model checkpoint.')
@@ -92,6 +94,7 @@ class NanoTabPFNClassifier():
             model = init_model_from_state_dict_file(model)
         self.model = model.to(device)
         self.device = device
+        self.num_mem_chunks = num_mem_chunks
 
     def fit(self, X_train: np.array, y_train: np.array):
         """ stores X_train and y_train for later use, also computes the highest class number occuring in num_classes """
@@ -115,7 +118,7 @@ class NanoTabPFNClassifier():
         with torch.no_grad():
             x = torch.from_numpy(x).unsqueeze(0).to(torch.float).to(self.device)  # introduce batch size 1
             y = torch.from_numpy(y).unsqueeze(0).to(torch.float).to(self.device)
-            out = self.model((x, y), single_eval_pos=len(self.X_train)).squeeze(0)  # remove batch size 1
+            out = self.model((x, y), single_eval_pos=len(self.X_train), num_mem_chunks=self.num_mem_chunks).squeeze(0)  # remove batch size 1
             # our pretrained classifier supports up to num_outputs classes, if the dataset has less we cut off the rest
             out = out[:, :self.num_classes]
             # apply softmax to get a probability distribution
@@ -125,7 +128,9 @@ class NanoTabPFNClassifier():
 
 class NanoTabPFNRegressor():
     """ scikit-learn like interface """
-    def __init__(self, model: NanoTabPFNModel|str|None = None, dist: FullSupportBarDistribution|str|None = None, device=get_default_device()):
+    def __init__(self, model: NanoTabPFNModel|str|None = None, dist: FullSupportBarDistribution|str|None = None, device: str|torch.device|None = None, num_mem_chunks: int = 8):
+        if device is None:
+            device = get_default_device()
         if model is None:
             model = 'nanotabpfn_regressor.pth'
             dist = 'nanotabpfn_regressor_buckets.pth'
@@ -150,6 +155,7 @@ class NanoTabPFNRegressor():
         self.device = device
         self.dist = dist
         self.normalized_dist = None  # Used after fit()
+        self.num_mem_chunks = num_mem_chunks
 
     def fit(self, X_train: np.array, y_train: np.array):
         """
@@ -179,7 +185,7 @@ class NanoTabPFNRegressor():
             X_tensor = torch.tensor(X, dtype=torch.float32, device=self.device).unsqueeze(0)
             y_tensor = torch.tensor(y, dtype=torch.float32, device=self.device).unsqueeze(0)
 
-            logits = self.model((X_tensor, y_tensor), single_eval_pos=len(self.X_train)).squeeze(0)
+            logits = self.model((X_tensor, y_tensor), single_eval_pos=len(self.X_train), num_mem_chunks=self.num_mem_chunks).squeeze(0)
             preds = self.normalized_dist.mean(logits)
 
         return preds.cpu().numpy()
