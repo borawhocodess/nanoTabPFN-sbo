@@ -235,7 +235,7 @@ def memory_chunking(num_mem_chunks: int) -> callable:
             if num_mem_chunks <= 1 or x.shape[0] == 0:
                 return func(x)
             elif torch.is_grad_enabled():
-                warnings.warn("`num_mem_chunks` was set to 1 since gradient computation is enabled. "
+                warnings.warn("Memory chunking is disabled since gradient computation is enabled to avoid incorrect gradients. "
                               "Please use `with torch.no_grad():` during inference to enable chunking.")
                 return func(x)
             chunk_size = max(1, x.shape[0] // num_mem_chunks)
