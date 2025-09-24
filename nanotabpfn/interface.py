@@ -38,17 +38,26 @@ def init_model_from_state_dict_file(file_path):
 
 def get_feature_preprocessor(X: ndarray | pd.DataFrame) -> ColumnTransformer:
     """
-    fits a preprocessor that imputes NaNs
+    fits a preprocessor that imputes NaNs, encodes categorical features and removes constant features
     """
     X = pd.DataFrame(X)
     num_mask = []
+    cat_mask = []
     for col in X:
+        unique_non_nan_entries = X[col].dropna().unique()
+        if len(unique_non_nan_entries) <= 1:
+            num_mask.append(False)
+            cat_mask.append(False)
+            continue
         non_nan_entries = X[col].notna().sum()
         numeric_entries = pd.to_numeric(X[col], errors='coerce').notna().sum() # in case numeric columns are stored as strings
+
         num_mask.append(non_nan_entries == numeric_entries)
+        cat_mask.append(non_nan_entries != numeric_entries)
         # num_mask.append(is_numeric_dtype(X[col]))  # Assumes pandas dtype is correct
 
     num_mask = np.array(num_mask)
+    cat_mask = np.array(cat_mask)
 
     num_transformer = Pipeline([
         ("to_pandas", FunctionTransformer(lambda x: pd.DataFrame(x) if not isinstance(x, pd.DataFrame) else x)), # to apply pd.to_numeric of pandas
@@ -63,7 +72,7 @@ def get_feature_preprocessor(X: ndarray | pd.DataFrame) -> ColumnTransformer:
     preprocessor = ColumnTransformer(
         transformers=[
             ('num', num_transformer, num_mask),
-            ('cat', cat_transformer, ~num_mask)
+            ('cat', cat_transformer, cat_mask)
         ]
     )
     return preprocessor
