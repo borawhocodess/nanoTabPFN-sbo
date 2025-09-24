@@ -151,7 +151,7 @@ if __name__ == "__main__":
         tasks = args.tasks
 
     predictions = get_openml_predictions(
-        model=model, tasks=tasks, max_n_features=args.max_n_features, max_n_samples=args.max_samples,
+        model=model, tasks=tasks, max_n_features=args.max_n_features, max_n_samples=args.max_n_samples,
         classification=(args.model_type=="classification"), cache_directory=args.cache_directory
     )
 
