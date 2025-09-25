@@ -1,3 +1,4 @@
+import math
 import warnings
 from typing import Tuple, Callable
 
@@ -238,7 +239,7 @@ def memory_chunking(num_mem_chunks: int) -> callable:
                 warnings.warn("Memory chunking is disabled since gradient computation is enabled to avoid incorrect gradients. "
                               "Please use `with torch.no_grad():` during inference to enable chunking.")
                 return func(x)
-            chunk_size = max(1, x.shape[0] // num_mem_chunks)
+            chunk_size = max(1, math.ceil(x.shape[0] / num_mem_chunks))
             for x_split in torch.split(x, split_size_or_sections=chunk_size, dim=0):
                 x_split[:] = func(x_split) # in-place modification to save memory, will cause wrong gradients if used during training
             return x
