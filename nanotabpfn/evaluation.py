@@ -133,12 +133,14 @@ if __name__ == "__main__":
                         help="Maximum number of features allowed for a task. Tasks exceeding this limit are skipped.")
     parser.add_argument("-max_n_samples", type=int, default=10_000,
                         help="Maximum number of instances allowed for a task. Tasks exceeding this limit are skipped.")
+    parser.add_argument("-num_mem_chunks", type=int, default=8,
+                        help="Chunks attention computation into `num_mem_chunks` many chunks to reduce memory usage.")
     args = parser.parse_args()
 
     if args.model_type == "classification":
-        model = NanoTabPFNClassifier(model=args.checkpoint)
+        model = NanoTabPFNClassifier(model=args.checkpoint, num_mem_chunks=args.num_mem_chunks)
     else:
-        model = NanoTabPFNRegressor(model=args.checkpoint, dist=args.dist_path)
+        model = NanoTabPFNRegressor(model=args.checkpoint, dist=args.dist_path, num_mem_chunks=args.num_mem_chunks)
     model.model.eval()
 
     if args.tasks == "toy_tasks" and args.model_type == "regression":
@@ -149,7 +151,7 @@ if __name__ == "__main__":
         tasks = args.tasks
 
     predictions = get_openml_predictions(
-        model=model, tasks=tasks, max_n_features=args.max_n_features, max_n_samples=args.max_samples,
+        model=model, tasks=tasks, max_n_features=args.max_n_features, max_n_samples=args.max_n_samples,
         classification=(args.model_type=="classification"), cache_directory=args.cache_directory
     )
 
