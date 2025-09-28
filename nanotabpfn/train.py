@@ -1,3 +1,5 @@
+import os
+
 import torch
 from torch import nn
 import time
@@ -84,7 +86,9 @@ def train(model: NanoTabPFNModel, prior: DataLoader, criterion: nn.CrossEntropyL
                 'model': model.state_dict(),
                 'optimizer': optimizer.state_dict()
             }
-            torch.save(training_state, 'latest_checkpoint.pth')
+
+            os.makedirs('other/checkpoints', exist_ok=True)
+            torch.save(training_state, 'other/checkpoints/latest_checkpoint.pth')
 
             for callback in callbacks:
                 if type(criterion) is FullSupportBarDistribution:
