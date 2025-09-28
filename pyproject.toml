@@ -29,6 +29,8 @@ dependencies = [
 [project.optional-dependencies]
 wandb = ["wandb>=0.20"]
 tensorboard = ["tensorboard>=2.19"]
+dev = ["pytest>=8.4.2"]
+
 [project.urls]
 Homepage = "https://github.com/PriorLabs/nanoTabPFN"
 Issues = "https://github.com/PriorLabs/nanoTabPFN/issues"
