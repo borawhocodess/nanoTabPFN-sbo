@@ -42,6 +42,11 @@ We will release multiple dumps of different scales soon. We also offer an interf
 ### Pretrain your own small nanoTabPFN
 First we download 100k pre-generated datasets with 50 datapoints, 3 features and up to 3  classes each from [here](https://ml.informatik.uni-freiburg.de/research-artifacts/pfefferle/nanoTabPFN/50x3_3_100k_classification.h5).
 
+or download pre-generated datasets by running:
+```
+python scripts/dumps.py --download
+```
+
 Then you can run:
 ```
 python pretrain_classification.py -epochs 80 -steps 25 -batchsize 50 -priordump 50x3_3_100k_classification.h5
