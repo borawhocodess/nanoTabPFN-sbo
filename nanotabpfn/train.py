@@ -5,12 +5,11 @@ from torch import nn
 import time
 from torch.utils.data import DataLoader
 from typing import Dict
-from pfns.model.bar_distribution import FullSupportBarDistribution
 import schedulefree
 
 from nanotabpfn.callbacks import Callback
 from nanotabpfn.model import NanoTabPFNModel
-from nanotabpfn.utils import get_default_device
+from nanotabpfn.utils import FullSupportBarDistribution, get_default_device
 
 
 def train(model: NanoTabPFNModel, prior: DataLoader, criterion: nn.CrossEntropyLoss | FullSupportBarDistribution,

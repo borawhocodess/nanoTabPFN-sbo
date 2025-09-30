@@ -2,7 +2,6 @@ import argparse
 import os
 
 import torch
-from pfns.model.bar_distribution import FullSupportBarDistribution
 from sklearn.metrics import r2_score
 
 from nanotabpfn.callbacks import ConsoleLoggerCallback
@@ -11,7 +10,12 @@ from nanotabpfn.interface import NanoTabPFNRegressor
 from nanotabpfn.model import NanoTabPFNModel
 from nanotabpfn.priors import PriorDumpDataLoader
 from nanotabpfn.train import train
-from nanotabpfn.utils import get_default_device, set_randomness_seed, make_global_bucket_edges
+from nanotabpfn.utils import (
+    FullSupportBarDistribution,
+    get_default_device,
+    make_global_bucket_borders,
+    set_randomness_seed,
+)
 
 parser = argparse.ArgumentParser()
 
@@ -52,21 +56,21 @@ model = NanoTabPFNModel(
     num_outputs=args.n_buckets,
 )
 
-bucket_edges = make_global_bucket_edges(
+bucket_borders = make_global_bucket_borders(
     filename=args.priordump,
     n_buckets=args.n_buckets,
     device=device,
 )
 
 torch.save(
-    bucket_edges,
+    bucket_borders,
     args.savebuckets,
 )
 
 if ckpt:
     model.load_state_dict(ckpt['model'])
 
-dist = FullSupportBarDistribution(bucket_edges)
+dist = FullSupportBarDistribution(bucket_borders)
 
 class EvaluationLoggerCallback(ConsoleLoggerCallback):
     def __init__(self, tasks):
