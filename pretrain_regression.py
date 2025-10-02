@@ -48,6 +48,19 @@ if args.loadcheckpoint:
 
 prior = PriorDumpDataLoader(filename=args.priordump, num_steps=args.steps, batch_size=args.batchsize, device=device, starting_index=args.steps*(ckpt['epoch'] if ckpt else 0))
 
+borders = make_global_bucket_borders(
+    filename=args.priordump,
+    n_buckets=args.n_buckets,
+    device=device,
+)
+
+torch.save(
+    borders,
+    args.savebuckets,
+)
+
+dist = FullSupportBarDistribution(borders)
+
 model = NanoTabPFNModel(
     num_attention_heads=args.heads,
     embedding_size=args.embeddingsize,
@@ -56,21 +69,9 @@ model = NanoTabPFNModel(
     num_outputs=args.n_buckets,
 )
 
-bucket_borders = make_global_bucket_borders(
-    filename=args.priordump,
-    n_buckets=args.n_buckets,
-    device=device,
-)
-
-torch.save(
-    bucket_borders,
-    args.savebuckets,
-)
-
 if ckpt:
     model.load_state_dict(ckpt['model'])
 
-dist = FullSupportBarDistribution(bucket_borders)
 
 class EvaluationLoggerCallback(ConsoleLoggerCallback):
     def __init__(self, tasks):

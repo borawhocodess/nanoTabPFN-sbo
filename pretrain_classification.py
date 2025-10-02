@@ -14,6 +14,7 @@ from nanotabpfn.train import train
 from nanotabpfn.utils import get_default_device, set_randomness_seed
 
 parser = argparse.ArgumentParser()
+
 parser.add_argument("-priordump", type=str, default="other/dumps/50x3_3_100k_classification.h5", help="path to the prior dump")
 parser.add_argument("-saveweights", type=str, default="other/model/nanotabpfn_weights.pth", help="path to save the trained model to")
 parser.add_argument("-heads", type=int, default=6, help="number of attention heads")
@@ -41,7 +42,6 @@ if args.loadcheckpoint:
 
 prior = PriorDumpDataLoader(filename=args.priordump, num_steps=args.steps, batch_size=args.batchsize, device=device, starting_index=args.steps*(ckpt['epoch'] if ckpt else 0))
 
-
 criterion = nn.CrossEntropyLoss()
 
 model = NanoTabPFNModel(
@@ -54,6 +54,7 @@ model = NanoTabPFNModel(
 
 if ckpt:
     model.load_state_dict(ckpt['model'])
+
 
 class EvaluationLoggerCallback(ConsoleLoggerCallback):
     def __init__(self, tasks):
