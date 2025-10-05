@@ -21,17 +21,12 @@ def make_global_bucket_edges(filename, n_buckets=100, device=get_default_device(
         y = f["y"]
         num_tables, num_datapoints = y.shape
 
-        ys_normalised = []
         num_tables_to_use = min(num_tables, max_y // num_datapoints)
 
-        for i in range(num_tables_to_use):
-            y_i = np.array(y[i, :], dtype=np.float32)
-            y_i_mean = np.mean(y_i)
-            y_i_std = np.std(y_i) + 1e-8
-            y_i_normalised = (y_i - y_i_mean) / y_i_std
-            ys_normalised.append(y_i_normalised)
-
-    ys_concat = np.concatenate(ys_normalised, axis=0)
+        y_subset = np.array(y[:num_tables_to_use, :], dtype=np.float32)
+        y_means  = y_subset.mean(axis=1, keepdims=True)
+        y_stds   = y_subset.std(axis=1, keepdims=True) + 1e-8
+        ys_concat = ((y_subset - y_means) / y_stds).ravel()
 
     if ys_concat.size < n_buckets:
         raise ValueError(f"Too few target samples ({ys_concat.size}) to compute {n_buckets} buckets.")
