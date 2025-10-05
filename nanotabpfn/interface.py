@@ -9,7 +9,7 @@ from pfns.bar_distribution import FullSupportBarDistribution
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import OrdinalEncoder, FunctionTransformer, StandardScaler
+from sklearn.preprocessing import OrdinalEncoder, FunctionTransformer
 
 from nanotabpfn.model import NanoTabPFNModel
 from nanotabpfn.utils import get_default_device
@@ -35,11 +35,9 @@ def init_model_from_state_dict_file(file_path):
     model.load_state_dict(torch.load(file_path, map_location='cpu'))
     return model
 
-
-def get_feature_preprocessor(X: np.ndarray | pd.DataFrame) -> Pipeline:
+def get_feature_preprocessor(X: np.ndarray | pd.DataFrame) -> ColumnTransformer:
     """
-    fits a preprocessor that imputes NaNs, encodes categorical features and removes constant features,
-    then z-normalizes the features
+    fits a preprocessor that imputes NaNs, encodes categorical features and removes constant features
     """
     X = pd.DataFrame(X)
     num_mask = []
@@ -69,17 +67,10 @@ def get_feature_preprocessor(X: np.ndarray | pd.DataFrame) -> Pipeline:
         ('imputer', SimpleImputer(strategy='most_frequent')),
     ])
 
-    cols = ColumnTransformer(
+    preprocessor = ColumnTransformer(
         transformers=[
             ('num', num_transformer, num_mask),
             ('cat', cat_transformer, cat_mask)
-        ]
-    )
-
-    preprocessor = Pipeline(
-        [
-            ("cols", cols),
-            ("scaler", StandardScaler()),
         ]
     )
     return preprocessor
