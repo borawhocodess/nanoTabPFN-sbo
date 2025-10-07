@@ -77,7 +77,18 @@ def get_feature_preprocessor(X: np.ndarray | pd.DataFrame) -> ColumnTransformer:
 
 class NanoTabPFNClassifier():
     """ scikit-learn like interface """
-    def __init__(self, model: NanoTabPFNModel|str|None = None, device: None|str|torch.device = None, num_mem_chunks: int = 8):
+
+    def __init__(
+        self,
+        model: NanoTabPFNModel | str | None = None,
+        device: None | str | torch.device = None,
+        num_mem_chunks: int = 8,
+        n_estimators: int = 1,
+        feature_permutation: bool = True,
+        label_permutation: bool = True,
+        temperature: float = 1.0,
+        random_state: int | None = None,
+    ):
         if device is None:
             device = get_default_device()
         if model is None:
@@ -92,13 +103,40 @@ class NanoTabPFNClassifier():
         self.model = model.to(device)
         self.device = device
         self.num_mem_chunks = num_mem_chunks
+        if n_estimators < 1:
+            raise ValueError('n_estimators must be at least 1')
+        if temperature <= 0:
+            raise ValueError('temperature must be greater than 0')
+        self.n_estimators = n_estimators
+        self.feature_permutation = feature_permutation
+        self.label_permutation = label_permutation
+        self.temperature = temperature
+        self.random_state = random_state
+
+        self._rng = np.random.default_rng(self.random_state)
+        self._ensemble_configs: list[dict[str, np.ndarray | None]] = []
 
     def fit(self, X_train: np.ndarray, y_train: np.ndarray):
         """ stores X_train and y_train for later use, also computes the highest class number occuring in num_classes """
         self.feature_preprocessor = get_feature_preprocessor(X_train)
         self.X_train = self.feature_preprocessor.fit_transform(X_train)
-        self.y_train = y_train
-        self.num_classes = max(set(y_train))+1
+        self.y_train = np.asarray(y_train).astype(int)
+        self.num_classes = int(max(set(self.y_train)) + 1)
+
+        self._rng = np.random.default_rng(self.random_state)
+        self._ensemble_configs = []
+        num_features = self.X_train.shape[1]
+        for _ in range(self.n_estimators):
+            feature_perm = None
+            if self.feature_permutation and num_features > 1:
+                feature_perm = self._rng.permutation(num_features)
+            label_perm = None
+            if self.label_permutation and self.num_classes > 1:
+                label_perm = self._rng.permutation(self.num_classes)
+            self._ensemble_configs.append({'feature_perm': feature_perm, 'label_perm': label_perm})
+        if not self._ensemble_configs:
+            # ensure at least one default configuration
+            self._ensemble_configs.append({'feature_perm': None, 'label_perm': None})
 
     def predict(self, X_test: np.ndarray) -> np.ndarray:
         """ calls predit_proba and picks the class with the highest probability for each datapoint """
@@ -110,22 +148,52 @@ class NanoTabPFNClassifier():
         creates (x,y), runs it through our PyTorch Model, cuts off the classes that didn't appear in the training data
         and applies softmax to get the probabilities
         """
-        x = np.concatenate((self.X_train, self.feature_preprocessor.transform(X_test)))
-        y = self.y_train
-        with torch.no_grad():
-            x = torch.from_numpy(x).unsqueeze(0).to(torch.float).to(self.device)  # introduce batch size 1
-            y = torch.from_numpy(y).unsqueeze(0).to(torch.float).to(self.device)
-            out = self.model((x, y), single_eval_pos=len(self.X_train), num_mem_chunks=self.num_mem_chunks).squeeze(0)  # remove batch size 1
-            # our pretrained classifier supports up to num_outputs classes, if the dataset has less we cut off the rest
-            out = out[:, :self.num_classes]
-            # apply softmax to get a probability distribution
-            probabilities = F.softmax(out, dim=1)
-            return probabilities.to('cpu').numpy()
+        X_test_transformed = self.feature_preprocessor.transform(X_test)
+
+        ensemble_probabilities = []
+
+        for config in self._ensemble_configs:
+            feature_perm = config['feature_perm']
+            label_perm = config['label_perm']
+
+            x_concat = np.concatenate((self.X_train, X_test_transformed))
+            if feature_perm is not None:
+                x_concat = x_concat[:, feature_perm]
+
+            if label_perm is not None:
+                y_train = np.take(label_perm, self.y_train)
+            else:
+                y_train = self.y_train
+
+            with torch.no_grad():
+                x_tensor = torch.from_numpy(x_concat).unsqueeze(0).to(torch.float32).to(self.device)
+                y_tensor = torch.from_numpy(y_train).unsqueeze(0).to(torch.float32).to(self.device)
+                logits = self.model((x_tensor, y_tensor), single_eval_pos=len(self.X_train), num_mem_chunks=self.num_mem_chunks).squeeze(0)
+                logits = logits[:, :self.num_classes] / self.temperature
+                probabilities = F.softmax(logits, dim=1).to('cpu').numpy()
+
+            if label_perm is not None:
+                probabilities = probabilities[:, label_perm]
+
+            ensemble_probabilities.append(probabilities)
+
+        mean_probabilities = np.mean(ensemble_probabilities, axis=0)
+        return mean_probabilities
 
 
 class NanoTabPFNRegressor():
     """ scikit-learn like interface """
-    def __init__(self, model: NanoTabPFNModel|str|None = None, dist: FullSupportBarDistribution|str|None = None, device: str|torch.device|None = None, num_mem_chunks: int = 8):
+
+    def __init__(
+        self,
+        model: NanoTabPFNModel | str | None = None,
+        dist: FullSupportBarDistribution | str | None = None,
+        device: str | torch.device | None = None,
+        num_mem_chunks: int = 8,
+        n_estimators: int = 1,
+        feature_permutation: bool = True,
+        random_state: int | None = None,
+    ):
         if device is None:
             device = get_default_device()
         if model is None:
@@ -152,6 +220,14 @@ class NanoTabPFNRegressor():
         self.device = device
         self.dist = dist
         self.num_mem_chunks = num_mem_chunks
+        if n_estimators < 1:
+            raise ValueError('n_estimators must be at least 1')
+        self.n_estimators = n_estimators
+        self.feature_permutation = feature_permutation
+        self.random_state = random_state
+
+        self._rng = np.random.default_rng(self.random_state)
+        self._ensemble_configs: list[dict[str, np.ndarray | None]] = []
 
     def fit(self, X_train: np.ndarray, y_train: np.ndarray):
         """
@@ -160,11 +236,22 @@ class NanoTabPFNRegressor():
         """
         self.feature_preprocessor = get_feature_preprocessor(X_train)
         self.X_train = self.feature_preprocessor.fit_transform(X_train)
-        self.y_train = y_train
+        self.y_train = np.asarray(y_train)
 
         self.y_train_mean = np.mean(self.y_train)
         self.y_train_std = np.std(self.y_train) + 1e-8
         self.y_train_n = (self.y_train - self.y_train_mean) / self.y_train_std
+
+        self._rng = np.random.default_rng(self.random_state)
+        self._ensemble_configs = []
+        num_features = self.X_train.shape[1]
+        for _ in range(self.n_estimators):
+            feature_perm = None
+            if self.feature_permutation and num_features > 1:
+                feature_perm = self._rng.permutation(num_features)
+            self._ensemble_configs.append({'feature_perm': feature_perm})
+        if not self._ensemble_configs:
+            self._ensemble_configs.append({'feature_perm': None})
 
     def predict(self, X_test: np.ndarray) -> np.ndarray:
         """
@@ -172,15 +259,26 @@ class NanoTabPFNRegressor():
         Predicts the means of the output distributions for X_test.
         Renormalizes the predictions back to the original target scale.
         """
-        X = np.concatenate((self.X_train, self.feature_preprocessor.transform(X_test)))
-        y = self.y_train_n
+        X_test_transformed = self.feature_preprocessor.transform(X_test)
 
-        with torch.no_grad():
-            X_tensor = torch.tensor(X, dtype=torch.float32, device=self.device).unsqueeze(0)
-            y_tensor = torch.tensor(y, dtype=torch.float32, device=self.device).unsqueeze(0)
+        ensemble_predictions = []
 
-            logits = self.model((X_tensor, y_tensor), single_eval_pos=len(self.X_train), num_mem_chunks=self.num_mem_chunks).squeeze(0)
-            preds_n = self.dist.mean(logits)         
-            preds = preds_n * self.y_train_std + self.y_train_mean
+        for config in self._ensemble_configs:
+            feature_perm = config['feature_perm']
 
-        return preds.cpu().numpy()
+            X_concat = np.concatenate((self.X_train, X_test_transformed))
+            if feature_perm is not None:
+                X_concat = X_concat[:, feature_perm]
+
+            with torch.no_grad():
+                X_tensor = torch.tensor(X_concat, dtype=torch.float32, device=self.device).unsqueeze(0)
+                y_tensor = torch.tensor(self.y_train_n, dtype=torch.float32, device=self.device).unsqueeze(0)
+
+                logits = self.model((X_tensor, y_tensor), single_eval_pos=len(self.X_train), num_mem_chunks=self.num_mem_chunks).squeeze(0)
+                preds_n = self.dist.mean(logits)
+                preds = preds_n * self.y_train_std + self.y_train_mean
+
+            ensemble_predictions.append(preds.cpu().numpy())
+
+        mean_predictions = np.mean(ensemble_predictions, axis=0)
+        return mean_predictions

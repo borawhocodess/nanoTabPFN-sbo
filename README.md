@@ -22,7 +22,7 @@ X, y = load_breast_cancer(return_X_y=True)
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.5, random_state=42)
 
 # Initialize a classifier
-clf = NanoTabPFNClassifier()
+clf = NanoTabPFNClassifier(n_estimators=4, temperature=0.9)
 clf.fit(X_train, y_train)
 
 # Predict probabilities
@@ -33,6 +33,8 @@ print("ROC AUC:", roc_auc_score(y_test, prediction_probabilities[:, 1]))
 predictions = clf.predict(X_test)
 print("Accuracy", accuracy_score(y_test, predictions))
 ```
+
+The `n_estimators` parameter activates a lightweight ensemble that averages predictions over several feature permutations (and label permutations for classification), following the ensemble strategy described in the original TabPFN work. A temperature parameter is also available to calibrate the predicted probabilities.
 
 ### Our Code
 
