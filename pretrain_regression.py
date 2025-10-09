@@ -1,7 +1,6 @@
 import argparse
 
 import torch
-from pfns.bar_distribution import FullSupportBarDistribution
 from sklearn.metrics import r2_score
 
 from nanotabpfn.callbacks import ConsoleLoggerCallback
@@ -10,7 +9,13 @@ from nanotabpfn.interface import NanoTabPFNRegressor
 from nanotabpfn.model import NanoTabPFNModel
 from nanotabpfn.priors import PriorDumpDataLoader
 from nanotabpfn.train import train
-from nanotabpfn.utils import get_default_device, set_randomness_seed, make_global_bucket_edges
+from nanotabpfn.utils import (
+    FullSupportBarDistribution,
+    get_default_device,
+    make_global_bucket_edges,
+    set_randomness_seed,
+)
+
 
 parser = argparse.ArgumentParser()
 
