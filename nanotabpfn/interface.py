@@ -133,7 +133,15 @@ class NanoTabPFNClassifier():
 
 class NanoTabPFNRegressor():
     """ scikit-learn like interface """
-    def __init__(self, model: NanoTabPFNModel|str|None = None, dist: FullSupportBarDistribution|str|None = None, device: str|torch.device|None = None, num_mem_chunks: int = 8):
+    def __init__(
+            self, 
+            model: NanoTabPFNModel|str|None = None, 
+            dist: FullSupportBarDistribution|str|None = None, 
+            device: str|torch.device|None = None, 
+            num_mem_chunks: int = 8,
+            n_estimators: int = 8,
+            seed: int = 42,
+        ):
         if device is None:
             device = get_default_device()
         if model is None:
@@ -160,7 +168,30 @@ class NanoTabPFNRegressor():
         self.device = device
         self.dist = dist
         self.num_mem_chunks = num_mem_chunks
+        self.n_estimators = n_estimators
+        self.seed = seed
 
+        self.preprocessing_pool = [
+            "quantile_id",
+            "svd",
+            "outlier_removal",
+            "power",
+            "onehot",
+        ]
+        self.ensemble_preprocessing_sets = []
+        self.ensemble_preprocessing_sets.append([])  # first model is without any preprocessing
+
+        rng = np.random.default_rng(self.seed)
+
+        for _ in range(1, self.n_estimators):
+            subset = rng.choice(
+                self.preprocessing_pool,
+                size=rng.integers(1, len(self.preprocessing_pool) + 1),
+                replace=False,
+            )
+            self.ensemble_preprocessing_sets.append(list(subset))
+
+        
     def fit(self, X_train: np.ndarray, y_train: np.ndarray):
         """
         Stores X_train and y_train for later use.
