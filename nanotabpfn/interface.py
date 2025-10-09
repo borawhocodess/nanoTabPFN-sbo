@@ -35,6 +35,14 @@ def init_model_from_state_dict_file(file_path):
     model.load_state_dict(torch.load(file_path, map_location='cpu'))
     return model
 
+# doing these as lambdas would cause NanoTabPFNClassifier to not be pickle-able,
+# which would cause issues if we want to run it inside the tabarena codebase
+def to_pandas(x):
+    return pd.DataFrame(x) if not isinstance(x, pd.DataFrame) else x
+
+def to_numeric(x):
+    return x.apply(pd.to_numeric, errors='coerce').to_numpy()
+
 def get_feature_preprocessor(X: np.ndarray | pd.DataFrame) -> ColumnTransformer:
     """
     fits a preprocessor that imputes NaNs, encodes categorical features and removes constant features
@@ -58,8 +66,8 @@ def get_feature_preprocessor(X: np.ndarray | pd.DataFrame) -> ColumnTransformer:
     cat_mask = np.array(cat_mask)
 
     num_transformer = Pipeline([
-        ("to_pandas", FunctionTransformer(lambda x: pd.DataFrame(x) if not isinstance(x, pd.DataFrame) else x)), # to apply pd.to_numeric of pandas
-        ("to_numeric", FunctionTransformer(lambda x: x.apply(pd.to_numeric, errors='coerce').to_numpy())), # in case numeric columns are stored as strings
+        ("to_pandas", FunctionTransformer(to_pandas)), # to apply pd.to_numeric of pandas
+        ("to_numeric", FunctionTransformer(to_numeric)), # in case numeric columns are stored as strings
         ('imputer', SimpleImputer(strategy='mean')) # median might be better because of outliers
     ])
     cat_transformer = Pipeline([
