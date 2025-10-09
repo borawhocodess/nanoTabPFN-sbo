@@ -13,7 +13,7 @@ from nanotabpfn.utils import get_default_device
 
 def train(model: NanoTabPFNModel, prior: DataLoader, criterion: nn.CrossEntropyLoss | FullSupportBarDistribution,
           epochs: int, accumulate_gradients: int = 1, lr: float = 1e-4, device: torch.device = None,
-          callbacks: list[Callback]=None, ckpt: Dict[str, torch.Tensor] = None):
+          callbacks: list[Callback]=None, ckpt: Dict[str, torch.Tensor] = None, multi_gpu: bool = False):
     """
     Trains our model on the given prior using the given criterion.
 
@@ -32,6 +32,8 @@ def train(model: NanoTabPFNModel, prior: DataLoader, criterion: nn.CrossEntropyL
     Returns:
         (torch.Tensor) a tensor of shape (num_rows, batch_size, num_features, embedding_size)
     """
+    if multi_gpu:
+        model = nn.DataParallel(model)
     # print(f"Using a Transformer with {sum(p.numel() for p in model.parameters())/1000/1000:.{2}f} M parameters")
     if callbacks is None:
         callbacks = []
@@ -64,6 +66,7 @@ def train(model: NanoTabPFNModel, prior: DataLoader, criterion: nn.CrossEntropyL
                 if classification_task:
                     targets = targets.reshape((-1,)).to(torch.long)
                     output = output.view(-1, output.shape[-1])
+
                 losses = criterion(output, targets)
                 loss = losses.mean() / accumulate_gradients
                 loss.backward()
@@ -81,20 +84,20 @@ def train(model: NanoTabPFNModel, prior: DataLoader, criterion: nn.CrossEntropyL
 
             training_state = {
                 'epoch': epoch,
-                'model': model.state_dict(),
+                'model': (model.module if multi_gpu else model).state_dict(),
                 'optimizer': optimizer.state_dict()
             }
             torch.save(training_state, 'latest_checkpoint.pth')
 
             for callback in callbacks:
                 if type(criterion) is FullSupportBarDistribution:
-                    callback.on_epoch_end(epoch, end_time - epoch_start_time, mean_loss, model, dist=criterion)
+                    callback.on_epoch_end(epoch, end_time - epoch_start_time, mean_loss, (model.module if multi_gpu else model), dist=criterion)
                 else:
-                    callback.on_epoch_end(epoch, end_time - epoch_start_time, mean_loss, model)
+                    callback.on_epoch_end(epoch, end_time - epoch_start_time, mean_loss, (model.module if multi_gpu else model))
     except KeyboardInterrupt:
         pass
     finally:
         for callback in callbacks:
             callback.close()
 
-    return model, total_loss
+    return (model.module if multi_gpu else model), total_loss

@@ -1,10 +1,10 @@
 import argparse
 
 import torch
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, roc_auc_score
 from torch import nn
 
-from nanotabpfn.callbacks import ConsoleLoggerCallback
+from nanotabpfn.callbacks import ConsoleLoggerCallback, WandbLoggerCallback
 from nanotabpfn.evaluation import get_openml_predictions, TOY_TASKS_CLASSIFICATION
 from nanotabpfn.interface import NanoTabPFNClassifier
 from nanotabpfn.model import NanoTabPFNModel
@@ -25,6 +25,7 @@ parser.add_argument("-lr", type=float, default=1e-4, help="learning rate")
 parser.add_argument("-steps", type=int, default=100, help="number of steps that constitute one epoch (important for lr scheduler)")
 parser.add_argument("-epochs", type=int, default=10000, help="number of epochs to train for")
 parser.add_argument("-loadcheckpoint", type=str, default=None, help="checkpoint from which to continue training")
+parser.add_argument("-multigpu", action="store_true", help="enable multi-GPU training using data parallelism")
 
 args = parser.parse_args()
 
@@ -36,7 +37,6 @@ if args.loadcheckpoint:
     ckpt = torch.load(args.loadcheckpoint)
 
 prior = PriorDumpDataLoader(filename=args.priordump, num_steps=args.steps, batch_size=args.batchsize, device=device, starting_index=args.steps*(ckpt['epoch'] if ckpt else 0))
-
 
 criterion = nn.CrossEntropyLoss()
 
@@ -51,7 +51,7 @@ model = NanoTabPFNModel(
 if ckpt:
     model.load_state_dict(ckpt['model'])
 
-class EvaluationLoggerCallback(ConsoleLoggerCallback):
+class ToyEvaluationLoggerCallback(ConsoleLoggerCallback):
     def __init__(self, tasks):
         self.tasks = tasks
 
@@ -65,8 +65,28 @@ class EvaluationLoggerCallback(ConsoleLoggerCallback):
         print(f'epoch {epoch:5d} | time {epoch_time:5.2f}s | mean loss {loss:5.2f} | avg accuracy {avg_score:.3f}',
               flush=True)
 
+class ProductionEvaluationLoggerCallback(WandbLoggerCallback):
+    def __init__(self, project: str, name: str = None, config: dict = None, log_dir: str = None):
+        super().__init__(project, name, config, log_dir)
 
-callbacks = [EvaluationLoggerCallback(TOY_TASKS_CLASSIFICATION)]
+    def on_epoch_end(self, epoch: int, epoch_time: float, loss: float, model, **kwargs):
+        classifier = NanoTabPFNClassifier(model, device)
+        predictions = get_openml_predictions(model=classifier, classification=True)
+        scores = []
+        for dataset_name, (y_true, y_pred, y_proba) in predictions.items():
+            scores.append(roc_auc_score(y_true, y_proba, multi_class='ovr'))
+        avg_score = sum(scores) / len(scores)
+        self.wandb.log({
+            'epoch': epoch,
+            'epoch_time': epoch_time,
+            'mean_loss': loss,
+            'tabarena_avg_roc_auc': avg_score
+        })
+        print(f'epoch {epoch:5d} | time {epoch_time:5.2f}s | mean loss {loss:5.2f} | avg roc auc {avg_score:.3f}',
+              flush=True)
+
+#callbacks = [ProductionEvaluationLoggerCallback('nanoTFM', 'nanoTabPFN-1')]
+callbacks = [ToyEvaluationLoggerCallback(TOY_TASKS_CLASSIFICATION)]
 
 trained_model, loss = train(
     model=model,
@@ -77,7 +97,8 @@ trained_model, loss = train(
     lr=args.lr,
     device=device,
     callbacks=callbacks,
-    ckpt=ckpt
+    ckpt=ckpt,
+    multi_gpu=args.multigpu
 )
 
 torch.save(trained_model.to('cpu').state_dict(), args.saveweights)
